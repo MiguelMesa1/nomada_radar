@@ -1,0 +1,13 @@
+import { createAdminClient } from '@insforge/sdk';
+process.loadEnvFile('.env.local');
+const email=process.env.RADAR_ADMIN_EMAIL,name=process.env.RADAR_ADMIN_NAME,password=process.env.RADAR_ADMIN_PASSWORD;
+if(!email||!name||!password||password.length<10)throw Error('Configura RADAR_ADMIN_EMAIL, RADAR_ADMIN_NAME y RADAR_ADMIN_PASSWORD (mínimo 10 caracteres) en .env.local. Nunca compartas ese archivo.');
+const client=createAdminClient({baseUrl:process.env.NEXT_PUBLIC_INSFORGE_URL,apiKey:process.env.INSFORGE_API_KEY});
+const existing=await client.database.from('user_profiles').select('user_id').limit(1);
+if(existing.error)throw Error('No se pudo verificar el estado de inicialización.');
+if(existing.data?.length)throw Error('Radar ya tiene usuarios. Usa Administración para gestionar accesos.');
+const creation=await client.auth.signUp({email,name,password,autoConfirm:true});
+if(creation.error&&creation.error.statusCode!==409)throw Error('No se pudo crear la cuenta Auth. Revisa el panel de InsForge y el soporte de creación administrativa.');
+const result=await client.database.rpc('radar_bootstrap_principal',{p_email:email,p_name:name});
+if(result.error)throw Error('No se pudo asignar el rol principal. Verifica que la cuenta Auth exista y que Radar no esté inicializado.');
+console.log('Administrador principal autorizado. Ingresa con tu correo y contraseña. Si InsForge solicita verificación, complétala antes del ingreso.');

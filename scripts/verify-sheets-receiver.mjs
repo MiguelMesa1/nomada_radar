@@ -1,0 +1,15 @@
+import fs from 'node:fs';
+import assert from 'node:assert/strict';
+process.loadEnvFile('.env.local');
+const endpoint=process.env.RADAR_SHEETS_ENDPOINT;
+if(!endpoint||!endpoint.startsWith('https://'))throw Error('Configura RADAR_SHEETS_ENDPOINT antes de verificar el receptor.');
+const token=fs.readFileSync('.env.radar-script.local','utf8').trim().split('=')[1];
+const request=(body,authorized)=>fetch(endpoint,{method:'POST',headers:{'Content-Type':'application/json',...(authorized?{'x-radar-token':token}:{})},body:JSON.stringify(body),signal:AbortSignal.timeout(45000)});
+const denied=await request({probe:true},false);
+assert.equal(denied.status,401,`unauthorized probe returned ${denied.status}`);
+const ready=await request({probe:true},true);const result=await ready.json();
+assert.equal(ready.status,200,JSON.stringify(result));assert.equal(result.ready,true);
+assert.equal(result.parser,true,'Deployed date parser must accept a valid sale with a pending total');
+const invalid=await request({version:1,sheets:[]},true);
+assert.equal(invalid.status,422);
+console.log('Live receiver: unauthorized=401, authorized backend readiness=200, invalid payload=422. No sales or sync runs created.');

@@ -1,0 +1,32 @@
+import {chromium} from 'playwright';
+const browser=await chromium.launch({headless:true});
+const page=await browser.newPage({viewport:{width:1280,height:900}});
+const errors=[];page.on('pageerror',e=>errors.push(e.message));
+const check=(v,m)=>{if(!v)throw Error(m)};
+const date=new Intl.DateTimeFormat('en-CA',{timeZone:'America/Bogota'}).format(new Date());
+const post={post_id:'IG-COVERAGE',nombre_creativo:'Cobertura de totales',campana:'Prueba local',producto:'Kit',plataforma:'Instagram',activo:true,fecha_inicio:date};
+const sales=[100000,0,null,null].map((importe_cop,i)=>({pedido_id:`QA-${i}`,fecha_venta:date+'T12:00:00-05:00',post_id:post.post_id,ciudad_original:'Bogotá',ciudad_normalizada:'Bogotá',departamento:'Cundinamarca',linea:'AKT',estado:'confirmado',importe_cop}));
+let allPending=false;
+await page.route('**/api/snapshot?**',route=>route.fulfill({json:{mode:'live',profile:{user_id:'qa',nombre:'Prueba local',email:'',role:'analista',activo:true},catalog:[post],sales:allPending?sales.map(s=>({...s,importe_cop:null})):sales,runs:[]}}));
+try{
+ await page.goto('http://127.0.0.1:3000/inicio',{waitUntil:'networkidle'});
+ await page.getByRole('heading',{name:'Inicio',exact:true}).waitFor();
+ await page.getByText('2 de 4 ventas tienen total pendiente.',{exact:true}).waitFor();
+ const cards=page.locator('.kpis .kpi');
+ check(await cards.nth(0).locator('.kpi-value').innerText()==='4','All four sales must count');
+ check((await cards.nth(1).innerText()).includes('100.000')&&(await cards.nth(1).innerText()).includes('parcial'),'Revenue must be labelled partial');
+ check((await cards.nth(2).innerText()).includes('50.000'),'Ticket must divide by two known totals, including zero');
+ await page.getByRole('link',{name:'Ver todos',exact:true}).click();
+ await page.getByRole('heading',{name:'Post ID',exact:true}).waitFor();
+ await page.locator('table tbody tr').first().click();
+ await page.getByRole('dialog').waitFor();
+ check((await page.getByRole('dialog').innerText()).includes('2 de 4 ventas con total'),'Detail must show known-total coverage');
+ await page.keyboard.press('Escape');
+ allPending=true;
+ await page.goto('http://127.0.0.1:3000/inicio',{waitUntil:'networkidle'});
+ await page.getByText('4 de 4 ventas tienen total pendiente.',{exact:true}).waitFor();
+ check(await page.locator('.kpis .kpi').nth(1).locator('.kpi-value').innerText()==='Pendiente','Unknown revenue must not display zero');
+ check(await page.locator('.kpis .kpi').nth(2).locator('.kpi-value').innerText()==='Pendiente','Unknown ticket must not display zero');
+ check(errors.length===0,'Browser errors: '+errors.join('; '));
+ console.log('Pending-total browser flow passed: all orders count, partial revenue, correct ticket, all-unknown states and detail coverage.');
+}finally{await browser.close()}

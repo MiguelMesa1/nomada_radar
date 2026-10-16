@@ -1,0 +1,44 @@
+{
+  "name": "nomada-radar",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev --hostname 127.0.0.1",
+    "build": "next build",
+    "start": "next start --hostname 127.0.0.1",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:browser": "node scripts/reporting-smoke.mjs && node scripts/interactions-smoke.mjs && node scripts/daily-smoke.mjs",
+    "build:receiver": "node scripts/build-sheets-function.mjs",
+    "build:apps-script": "node scripts/build-apps-script.mjs"
+  },
+  "dependencies": {
+    "@insforge/sdk": "1.5.2",
+    "@radix-ui/react-dialog": "1.3.1",
+    "class-variance-authority": "0.7.1",
+    "clsx": "2.1.1",
+    "lucide-react": "1.57.0",
+    "next": "16.4.1",
+    "react": "19.3.1",
+    "react-dom": "19.3.1",
+    "recharts": "3.10.1",
+    "server-only": "0.0.1",
+    "tailwind-merge": "3.7.0",
+    "zod": "4.6.7"
+  },
+  "devDependencies": {
+    "@tailwindcss/postcss": "4.3.3",
+    "@types/node": "26.6.5",
+    "@types/react": "19.3.0",
+    "@types/react-dom": "19.3.0",
+    "autoprefixer": "10.6.1",
+    "playwright": "1.62.1",
+    "postcss": "8.5.30",
+    "tailwindcss": "4.3.3",
+    "typescript": "7.0.2",
+    "vitest": "5.0.4"
+  },
+  "engines": {
+    "node": ">=22.13.0"
+  }
+}

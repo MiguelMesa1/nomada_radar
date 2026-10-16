@@ -1,0 +1,5 @@
+import { notFound } from 'next/navigation';
+import Radar from '@/components/radar';
+import { monthRange } from '@/lib/report-period';
+const views=['inicio','post-id','interacciones','ubicaciones','marcas','calidad','catalogo','administracion'];
+export default async function Page({params,searchParams}:{params:Promise<{view:string}>;searchParams:Promise<{demo?:string;from?:string;to?:string;marca?:string;periodo?:string}>}) { const {view}=await params; const {demo,from,to,marca,periodo}=await searchParams; if(!views.includes(view)) notFound(); const valid=from&&to&&/^\d{4}-\d{2}-\d{2}$/.test(from)&&/^\d{4}-\d{2}-\d{2}$/.test(to)&&Number.isFinite(Date.parse(from))&&Number.isFinite(Date.parse(to))&&from<=to&&Date.parse(to)-Date.parse(from)<=365*86400000;return <Radar view={view} demo={demo==='1'} initialRange={valid?{from,to}:monthRange()} initialBrand={marca??''} initialPeriod={periodo==='dia'?'Día':periodo==='mes'?'Mes':periodo==='fechas'?'Fechas':valid&&from===to?'Día':valid&&!from.endsWith('-01')?'Fechas':'Mes'}/>; }

@@ -1,0 +1,38 @@
+import assert from 'node:assert/strict';
+import {mkdirSync} from 'node:fs';
+import {chromium} from 'playwright';
+const base=process.env.RADAR_QA_URL??'http://127.0.0.1:3003',today=new Intl.DateTimeFormat('en-CA',{timeZone:'America/Bogota'}).format(new Date()),month=today.slice(0,7);
+const previous=new Date(today+'T12:00:00-05:00');previous.setUTCDate(previous.getUTCDate()-1);const yesterday=new Intl.DateTimeFormat('en-CA',{timeZone:'America/Bogota'}).format(previous);
+const post=(id,line,brand)=>({post_id:id,nombre_creativo:id,producto:line,marca:brand,campana:'',plataforma:'Otra',activo:true,fecha_inicio:month+'-01'});
+const sale=(id,post_id,date)=>({pedido_id:id,post_id,linea:'',fecha_venta:date+'T12:00:00-05:00',ciudad_original:'Bogotá',ciudad_normalizada:'Bogotá',departamento:'Cundinamarca',importe_cop:null,estado:'confirmado'});
+const snapshot={mode:'live',profile:{user_id:'qa',nombre:'QA',role:'analista',email:'',activo:true},runs:[],catalog:[post('A','Pulsar 180','Bajaj'),post('B','XTZ 125','Yamaha')],sales:[sale('1','A',today),sale('2','A',yesterday),sale('3','B',today)],interactions:[{post_id:'A',mes:month,interacciones:10},{post_id:'B',mes:month,interacciones:50}],dailyInteractions:[{mes:month,sin_fecha:0,rows:[{post_id:'A',fecha:yesterday,interacciones:3},{post_id:'A',fecha:today,interacciones:7},{post_id:'B',fecha:today,interacciones:50}]}]};
+const browser=await chromium.launch({headless:true}),page=await browser.newPage({viewport:{width:1440,height:1000}});page.setDefaultTimeout(15000);
+const errors=[],requests=[];page.on('pageerror',e=>errors.push(e.message));
+await page.route('**/api/snapshot?**',route=>{requests.push(new URL(route.request().url()));return route.fulfill({json:snapshot})});
+let exported;await page.route('**/api/export?**',route=>{exported=new URL(route.request().url());return route.fulfill({body:'Post ID;Interacciones\nA;7',contentType:'text/csv'})});
+const waitValue=async(label,value)=>{await page.locator('.interaction-kpis .kpi').filter({has:page.getByText(label,{exact:true})}).locator('.kpi-value').filter({hasText:new RegExp('^'+value+'$')}).waitFor()};
+mkdirSync('tmp/qa',{recursive:true});
+try{
+ await page.goto(base+'/interacciones',{waitUntil:'domcontentloaded'});await waitValue('Interacciones recibidas','60');
+ await page.getByRole('heading',{name:'Interacciones por día',exact:true}).waitFor();
+ await page.getByLabel('Buscar interacciones',{exact:true}).fill('Pulsar');await waitValue('Interacciones recibidas','10');
+ await page.getByRole('button',{name:`Ver interacciones del ${yesterday}: 3`,exact:true}).click();await waitValue('Interacciones recibidas','3');
+ assert.equal(await page.getByLabel('Día del informe',{exact:true}).inputValue(),yesterday);assert.equal(requests.at(-1).searchParams.get('from'),yesterday);assert.equal(requests.at(-1).searchParams.get('to'),yesterday);
+ await waitValue('Ventas con interacciones','1');
+ await page.getByRole('button',{name:'Día siguiente',exact:true}).click();await waitValue('Interacciones recibidas','7');assert.equal(await page.getByLabel('Día del informe',{exact:true}).inputValue(),today);
+ const download=page.waitForEvent('download');await page.getByRole('button',{name:'Exportar CSV',exact:true}).click();await download;assert.equal(exported.searchParams.get('from'),today);assert.equal(exported.searchParams.get('to'),today);
+ await page.getByRole('link',{name:'Post ID',exact:true}).first().click();await page.getByRole('heading',{name:'Post ID',exact:true}).waitFor();assert.equal(await page.getByLabel('Día del informe',{exact:true}).inputValue(),today);
+ assert.equal(new URL(page.url()).searchParams.get('periodo'),'dia');await page.reload({waitUntil:'domcontentloaded'});await page.getByLabel('Día del informe',{exact:true}).waitFor();
+ await page.getByRole('link',{name:'Interacciones',exact:true}).first().click();await waitValue('Interacciones recibidas','57');
+ await page.getByLabel('Filtrar por marca',{exact:true}).selectOption('Bajaj');await waitValue('Interacciones recibidas','7');
+ await page.getByRole('button',{name:'Día anterior',exact:true}).click();await waitValue('Interacciones recibidas','3');
+ await page.getByRole('button',{name:'Hoy',exact:true}).click();await waitValue('Interacciones recibidas','7');
+ await page.screenshot({path:'tmp/qa/interacciones-dia-desktop.png',fullPage:true});
+ await page.setViewportSize({width:390,height:844});assert(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));await page.screenshot({path:'tmp/qa/interacciones-dia-mobile.png',fullPage:true});
+ await page.getByLabel('Día del informe',{exact:true}).fill('2025-12-31');await page.getByRole('heading',{name:'Sin interacciones disponibles',exact:true}).waitFor();
+ await page.getByRole('button',{name:'Día siguiente',exact:true}).click();assert.equal(await page.getByLabel('Día del informe',{exact:true}).inputValue(),'2026-01-01');
+ await page.getByRole('button',{name:'Hoy',exact:true}).click();await waitValue('Interacciones recibidas','7');
+ await page.getByRole('group',{name:'Ver informe por',exact:true}).getByRole('button',{name:'Mes',exact:true}).click();await waitValue('Interacciones recibidas','10');await page.getByLabel('Mes del informe',{exact:true}).waitFor();
+ assert(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));await page.screenshot({path:'tmp/qa/interacciones-movimiento-diario-mobile.png',fullPage:true});
+ assert.deepEqual(errors,[]);console.log('Daily flow passed: timeline filters/click, correct daily sales/counts, previous/next/today, daily CSV dates, date and mode preserved across navigation/reload, missing data, year boundary, month return and mobile fit.');
+}catch(error){await page.screenshot({path:'tmp/qa/daily-failure.png',fullPage:true});throw error}finally{await browser.close()}
