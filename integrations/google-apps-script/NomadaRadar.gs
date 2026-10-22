@@ -37,7 +37,7 @@ function instalarRadar(){
  // creating the new schedule first so a Google quota failure keeps the old one.
  ScriptApp.newTrigger('sincronizarRadar').timeBased().everyHours(4).create();
  triggers.forEach(function(t){ScriptApp.deleteTrigger(t);});
- SpreadsheetApp.getUi().alert('Carga completada. Actualización automática cada 4 horas. Puedes usar Actualizar cuando lo necesites.');
+ console.log('Carga completada. Actualización automática cada 4 horas. Puedes usar Actualizar cuando lo necesites.');
 }
 function esVentasRadar_(name){return normalizarRadar_(name)==='ventas';}
 function normalizarRadar_(value){return String(value==null?'':value).normalize('NFD').replace(/[\u0300-\u036f]/g,'').trim().toLowerCase();}

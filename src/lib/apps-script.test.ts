@@ -70,12 +70,12 @@ describe('Google Apps Script adapter',()=>{
   expect(()=>context.sincronizarRadar()).toThrow('una sola pestaña llamada Ventas');
   expect(posted).toBe(false);expect(props.RADAR_ULTIMO_RESULTADO).toContain('ERROR');
  });
- it('replaces hourly duplicates with one four-hour trigger and preserves unrelated jobs on repeated installs',()=>{
+ it('installs in headless contexts, replacing hourly duplicates with one four-hour trigger and preserving unrelated jobs',()=>{
   const {context}=setup();
   const unrelated={getHandlerFunction:()=> 'otraTarea',hours:1};
   let triggers=[{getHandlerFunction:()=> 'sincronizarRadar',hours:1},{getHandlerFunction:()=> 'sincronizarRadar',hours:1},unrelated];
   context.ScriptApp={getProjectTriggers:()=>[...triggers],deleteTrigger:(t:unknown)=>{triggers=triggers.filter(v=>v!==t)},newTrigger:(handler:string)=>({timeBased:()=>({everyHours:(hours:number)=>({create:()=>{triggers.push({getHandlerFunction:()=>handler,hours})}})})})};
-  context.SpreadsheetApp={getUi:()=>({alert:()=>{}})};context.sincronizarRadar=()=>{};
+  context.SpreadsheetApp={getUi:()=>{throw Error('Cannot call SpreadsheetApp.getUi() from this context.')}};context.sincronizarRadar=()=>{};
   for(let i=0;i<3;i++){
    context.instalarRadar();
    expect(triggers.filter(t=>t.getHandlerFunction()==='sincronizarRadar').map(t=>t.hours)).toEqual([4]);
