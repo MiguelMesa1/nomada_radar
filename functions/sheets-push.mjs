@@ -32,7 +32,9 @@ export default async function handler(req){
    // Exercise the real deployed parser, not only connectivity or schema rejection.
    const sample=parsePush({version:1,sheets:[{spreadsheetId:'radar_readiness_check_only',sheetId:0,name:'Ventas',rows:[pushHeaders,['15/10/2026','TEST','Bogotá','Cundinamarca',null,'',null]]}]});
    if(sample.sales.length!==1||sample.sales[0].importe_cop!==null||!sample.sales[0].fecha_venta.startsWith('2026-10-15'))throw Error('El validador de fechas no está disponible.');
-   const check=await admin.database.from('sync_runs').select('id').limit(1);if(check.error)throw Error('No se pudo consultar el backend.');return json({ok:true,ready:true,parser:true});
+   const formats=['524.000 pesos','COP $ 524,000.00','524 000','524 mil'];
+   if(formats.some(value=>parseCOP(value)!==524000)||parseCOP('524.000 y 145.000 pesos')!==null)throw Error('El validador de precios no está disponible.');
+   const check=await admin.database.from('sync_runs').select('id').limit(1);if(check.error)throw Error('No se pudo consultar el backend.');return json({ok:true,ready:true,parser:true,currencyFormats:true});
   }
   const aliases=await admin.database.from('city_aliases').select('alias,ciudad_canonica,departamento').limit(10000);
   if(aliases.error)throw Error('No se pudieron leer los alias.');

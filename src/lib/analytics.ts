@@ -12,10 +12,29 @@ export const colombiaDay = (d: Date) => dayFormatter.format(d);
 export const normalize = (v: unknown) => String(v ?? '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim().toLowerCase().replace(/\s+/g, ' ');
 export function parseCOP(value: unknown): number | null {
   if (typeof value === 'number') return Number.isFinite(value) && value >= 0 && Number.isSafeInteger(value) ? value : null;
-  const v = String(value ?? '').trim().replace(/COP|pesos?|\$|\s/gi, '');
-  if (!v || !/^(?:\d+|\d{1,3}(?:\.\d{3})+)(?:,0{1,2})?$/.test(v)) return null;
-  const amount = Number(v.replace(/\./g, '').replace(/,0{1,2}$/, ''));
-  return Number.isSafeInteger(amount) ? amount : null;
+  if(typeof value!=='string'||value.length>100)return null;
+  let v=value.normalize('NFKC').normalize('NFD').replace(/[\u0300-\u036f]/g,'').trim();
+  // Currency labels belong at the edges: never join numbers around text.
+  const currency='(?:COL\\s*\\$|COP|(?:de\\s+)?pesos?(?:\\s+colombianos?)?|\\$)';
+  v=v.replace(new RegExp('^(?:'+currency+'\\s*)+','i'),'').replace(new RegExp('(?:\\s*'+currency+')+$','i'),'').trim();
+  if(!v)return null;
+  const scaled=/^(\d+)(?:[.,](\d{1,2}))?\s*(mil|k|millon|millones)$/i.exec(v);
+  if(scaled){
+   // Exact arithmetic avoids floating point errors for amounts like 1,15 millones.
+   const decimals=scaled[2]??'',scale=/^(mil|k)$/i.test(scaled[3])?1000n:1000000n;
+   const amount=BigInt(scaled[1]+decimals)*scale/(10n**BigInt(decimals.length));
+   return amount<=BigInt(Number.MAX_SAFE_INTEGER)?Number(amount):null;
+  }
+  v=v.replace(/[ \u00a0\u202f]+/g,' ');
+  let digits:string;
+  if(/^\d+$/.test(v))digits=v;
+  else if(/^\d{1,3}(?:\.\d{3})+(?:,0{1,2})?$/.test(v))digits=v.replace(/,0{1,2}$/,'').replace(/\./g,'');
+  else if(/^\d{1,3}(?:,\d{3})+(?:\.0{1,2})?$/.test(v))digits=v.replace(/\.0{1,2}$/,'').replace(/,/g,'');
+  else if(/^\d{1,3}(?: \d{3})+(?:[.,]0{1,2})?$/.test(v))digits=v.replace(/[.,]0{1,2}$/,'').replace(/ /g,'');
+  else if(/^\d+[.,]0{1,2}$/.test(v))digits=v.replace(/[.,]0{1,2}$/,'');
+  else return null;
+  const amount=Number(digits);
+  return Number.isSafeInteger(amount)&&amount>=0?amount:null;
 }
 export function dateRange(days: number, end = colombiaDay(new Date())) {
   const start = new Date(`${end}T12:00:00-05:00`); start.setUTCDate(start.getUTCDate() - days + 1);
@@ -59,7 +78,7 @@ export function metrics(sales: Sale[], catalog: CatalogPost[], from: string, to:
 }
 export function aggregate(sales: Sale[], field: 'ciudad_normalizada' | 'departamento' | 'linea') {
   const map = new Map<string, { id:string; name: string; orders: number; value: number; pricedOrders:number;pendingTotals:number;department: string }>();
-  for (const s of sales) { const name = s[field] || (field==='ciudad_normalizada'?s.ciudad_original:'') || 'Por normalizar';const id=field==='ciudad_normalizada'?`${name}|${normalize(s.departamento)}`:name; const entry = map.get(id) ?? { id,name, orders: 0, value: 0, pricedOrders:0,pendingTotals:0, department: s.departamento }; entry.orders++; entry.value += s.importe_cop??0;if(s.importe_cop===null)entry.pendingTotals++;else entry.pricedOrders++; map.set(id, entry); }
+  for (const s of sales) { const name = s[field] || (field==='ciudad_normalizada'?s.ciudad_original:'') || (field==='ciudad_normalizada'?'Sin ciudad encontrada':field==='departamento'?'Sin departamento':'Sin línea');const id=field==='ciudad_normalizada'?`${name}|${normalize(s.departamento)}`:name; const entry = map.get(id) ?? { id,name, orders: 0, value: 0, pricedOrders:0,pendingTotals:0, department: s.departamento }; entry.orders++; entry.value += s.importe_cop??0;if(s.importe_cop===null)entry.pendingTotals++;else entry.pricedOrders++; map.set(id, entry); }
   return [...map.values()].sort((a,b)=>b.orders-a.orders);
 }
 export function csvCell(value: unknown) { const s = String(value ?? ''); return '"' + (/^(?:[\s\u0000-\u001f]*[=+@\-]|[\t\r\n])/.test(s) ? "'" + s : s).replace(/"/g, '""') + '"'; }

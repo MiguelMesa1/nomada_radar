@@ -24,7 +24,7 @@ try{
  await page.getByRole('link',{name:'Post ID',exact:true}).first().click();await page.getByRole('heading',{name:'Post ID',exact:true}).waitFor();assert.equal(await page.getByLabel('Día del informe',{exact:true}).inputValue(),today);
  assert.equal(new URL(page.url()).searchParams.get('periodo'),'dia');await page.reload({waitUntil:'domcontentloaded'});await page.getByLabel('Día del informe',{exact:true}).waitFor();
  await page.getByRole('link',{name:'Interacciones',exact:true}).first().click();await waitValue('Interacciones recibidas','57');
- await page.getByLabel('Filtrar por marca',{exact:true}).selectOption('Bajaj');await waitValue('Interacciones recibidas','7');
+ await page.getByLabel('Filtrar interacciones por línea',{exact:true}).selectOption('Pulsar 180');await waitValue('Interacciones recibidas','7');
  await page.getByRole('button',{name:'Día anterior',exact:true}).click();await waitValue('Interacciones recibidas','3');
  await page.getByRole('button',{name:'Hoy',exact:true}).click();await waitValue('Interacciones recibidas','7');
  await page.screenshot({path:'tmp/qa/interacciones-dia-desktop.png',fullPage:true});

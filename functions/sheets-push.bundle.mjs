@@ -17,22 +17,14 @@ function saleLine(sale     ,catalog              =[]){
   if(['XTZ 125','XTZ 150'].includes(model))return model;
   if(!sale.post_id&&!!process.env.NEXT_PUBLIC_RADAR_XTZ_125_ROW&&sale.pedido_id===process.env.NEXT_PUBLIC_RADAR_XTZ_125_ROW&&Date.parse(sale.fecha_venta)===Date.parse('2026-10-01T21:56:35.000Z'))return 'XTZ 125';
  }
- return line||(post?postLine(post):'');
+ return !isMissingLine(line)?line:(post?postLine(post):'');
 }
+function isMissingLine(value        ){const key=lineKey(value);return !key||key==='sin linea';}
 function postLine(post            ,sales       =[]){
- if(post.producto.trim())return canonicalLine(post.producto);
- const counts=new Map               ();for(const s of sales)if(s.post_id===post.post_id&&canonicalLine(s.linea)){const line=canonicalLine(s.linea);counts.set(line,(counts.get(line)??0)+1);}
+ if(!isMissingLine(post.producto))return canonicalLine(post.producto);
+ const counts=new Map               ();for(const s of sales)if(s.post_id===post.post_id&&!isMissingLine(s.linea)){const line=canonicalLine(s.linea);counts.set(line,(counts.get(line)??0)+1);}
  return [...counts].sort((a,b)=>b[1]-a[1])[0]?.[0]??'Sin línea';
 }
-function manufacturer(line       ){
- const key=lineKey(canonicalLine(line));
- if(/^xtz(?:\s|$)/.test(key))return 'Yamaha';
- if(/^(?:pulsar|ns\s?200|boxer)(?:\s|$)/.test(key))return 'Bajaj';
- if(key==='superlander')return 'Superlander';
- return 'Sin marca';
-}
-function postBrand(post            ,sales       =[]){return post.marca?.trim()||manufacturer(postLine(post,sales));}
-function saleBrand(sale     ,catalog              ){const post=catalog.find(p=>p.post_id===sale.post_id);return post?.marca?.trim()||manufacturer(saleLine(sale,catalog));}
 
 const currencyFormatter = new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', maximumFractionDigits: 0 });
 const numberFormatter = new Intl.NumberFormat('es-CO', { maximumFractionDigits: 1 });
@@ -47,10 +39,29 @@ const colombiaDay = (d      ) => dayFormatter.format(d);
 const normalize = (v         ) => String(v ?? '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim().toLowerCase().replace(/\s+/g, ' ');
 function parseCOP(value         )                {
   if (typeof value === 'number') return Number.isFinite(value) && value >= 0 && Number.isSafeInteger(value) ? value : null;
-  const v = String(value ?? '').trim().replace(/COP|pesos?|\$|\s/gi, '');
-  if (!v || !/^(?:\d+|\d{1,3}(?:\.\d{3})+)(?:,0{1,2})?$/.test(v)) return null;
-  const amount = Number(v.replace(/\./g, '').replace(/,0{1,2}$/, ''));
-  return Number.isSafeInteger(amount) ? amount : null;
+  if(typeof value!=='string'||value.length>100)return null;
+  let v=value.normalize('NFKC').normalize('NFD').replace(/[\u0300-\u036f]/g,'').trim();
+  // Currency labels belong at the edges: never join numbers around text.
+  const currency='(?:COL\\s*\\$|COP|(?:de\\s+)?pesos?(?:\\s+colombianos?)?|\\$)';
+  v=v.replace(new RegExp('^(?:'+currency+'\\s*)+','i'),'').replace(new RegExp('(?:\\s*'+currency+')+$','i'),'').trim();
+  if(!v)return null;
+  const scaled=/^(\d+)(?:[.,](\d{1,2}))?\s*(mil|k|millon|millones)$/i.exec(v);
+  if(scaled){
+   // Exact arithmetic avoids floating point errors for amounts like 1,15 millones.
+   const decimals=scaled[2]??'',scale=/^(mil|k)$/i.test(scaled[3])?1000n:1000000n;
+   const amount=BigInt(scaled[1]+decimals)*scale/(10n**BigInt(decimals.length));
+   return amount<=BigInt(Number.MAX_SAFE_INTEGER)?Number(amount):null;
+  }
+  v=v.replace(/[ \u00a0\u202f]+/g,' ');
+  let digits       ;
+  if(/^\d+$/.test(v))digits=v;
+  else if(/^\d{1,3}(?:\.\d{3})+(?:,0{1,2})?$/.test(v))digits=v.replace(/,0{1,2}$/,'').replace(/\./g,'');
+  else if(/^\d{1,3}(?:,\d{3})+(?:\.0{1,2})?$/.test(v))digits=v.replace(/\.0{1,2}$/,'').replace(/,/g,'');
+  else if(/^\d{1,3}(?: \d{3})+(?:[.,]0{1,2})?$/.test(v))digits=v.replace(/[.,]0{1,2}$/,'').replace(/ /g,'');
+  else if(/^\d+[.,]0{1,2}$/.test(v))digits=v.replace(/[.,]0{1,2}$/,'');
+  else return null;
+  const amount=Number(digits);
+  return Number.isSafeInteger(amount)&&amount>=0?amount:null;
 }
 function dateRange(days        , end = colombiaDay(new Date())) {
   const start = new Date(`${end}T12:00:00-05:00`); start.setUTCDate(start.getUTCDate() - days + 1);
@@ -94,7 +105,7 @@ function metrics(sales        , catalog               , from        , to        
 }
 function aggregate(sales        , field                                                 ) {
   const map = new Map                                                                                                                                 ();
-  for (const s of sales) { const name = s[field] || (field==='ciudad_normalizada'?s.ciudad_original:'') || 'Por normalizar';const id=field==='ciudad_normalizada'?`${name}|${normalize(s.departamento)}`:name; const entry = map.get(id) ?? { id,name, orders: 0, value: 0, pricedOrders:0,pendingTotals:0, department: s.departamento }; entry.orders++; entry.value += s.importe_cop??0;if(s.importe_cop===null)entry.pendingTotals++;else entry.pricedOrders++; map.set(id, entry); }
+  for (const s of sales) { const name = s[field] || (field==='ciudad_normalizada'?s.ciudad_original:'') || (field==='ciudad_normalizada'?'Sin ciudad encontrada':field==='departamento'?'Sin departamento':'Sin línea');const id=field==='ciudad_normalizada'?`${name}|${normalize(s.departamento)}`:name; const entry = map.get(id) ?? { id,name, orders: 0, value: 0, pricedOrders:0,pendingTotals:0, department: s.departamento }; entry.orders++; entry.value += s.importe_cop??0;if(s.importe_cop===null)entry.pendingTotals++;else entry.pricedOrders++; map.set(id, entry); }
   return [...map.values()].sort((a,b)=>b.orders-a.orders);
 }
 function csvCell(value         ) { const s = String(value ?? ''); return '"' + (/^(?:[\s\u0000-\u001f]*[=+@\-]|[\t\r\n])/.test(s) ? "'" + s : s).replace(/"/g, '""') + '"'; }
@@ -134,7 +145,6 @@ function parseSheet(sheet       ,rows            ,aliases            =[],validSt
   const original=String(row[c.city]??'').trim(),dept=String(row[c.department]??'').trim(),alias=aliases.find(a=>normalize(a.alias)===normalize(original)&&normalize(a.departamento)===normalize(dept));
   const canonical=alias?.ciudad_canonica??knownCities[normalize(original)]??'';
   const post_id=String(row[c.post]??'').trim().toUpperCase();
-  if(!post_id)issues.push({sheet,row:i+1,type:'missing_post',message:'Pedido sin Post ID',pedido_id:id});
   if(!canonical)issues.push({sheet,row:i+1,type:'city',message:'Ciudad pendiente de normalizar',pedido_id:id});
   if(pendingAmount)issues.push({sheet,row:i+1,type:'missing_total',message:'Total del pedido pendiente; la venta sí cuenta',pedido_id:id});
   sales.push({pedido_id:id,fecha_venta:date,post_id,ciudad_original:original,ciudad_normalizada:canonical,departamento:dept,importe_cop:amount,estado:state,linea:lineCol<0?'':String(row[lineCol]??'').trim()});
@@ -241,7 +251,9 @@ export default async function handler(req){
    // Exercise the real deployed parser, not only connectivity or schema rejection.
    const sample=parsePush({version:1,sheets:[{spreadsheetId:'radar_readiness_check_only',sheetId:0,name:'Ventas',rows:[pushHeaders,['15/10/2026','TEST','Bogotá','Cundinamarca',null,'',null]]}]});
    if(sample.sales.length!==1||sample.sales[0].importe_cop!==null||!sample.sales[0].fecha_venta.startsWith('2026-10-15'))throw Error('El validador de fechas no está disponible.');
-   const check=await admin.database.from('sync_runs').select('id').limit(1);if(check.error)throw Error('No se pudo consultar el backend.');return json({ok:true,ready:true,parser:true});
+   const formats=['524.000 pesos','COP $ 524,000.00','524 000','524 mil'];
+   if(formats.some(value=>parseCOP(value)!==524000)||parseCOP('524.000 y 145.000 pesos')!==null)throw Error('El validador de precios no está disponible.');
+   const check=await admin.database.from('sync_runs').select('id').limit(1);if(check.error)throw Error('No se pudo consultar el backend.');return json({ok:true,ready:true,parser:true,currencyFormats:true});
   }
   const aliases=await admin.database.from('city_aliases').select('alias,ciudad_canonica,departamento').limit(10000);
   if(aliases.error)throw Error('No se pudieron leer los alias.');

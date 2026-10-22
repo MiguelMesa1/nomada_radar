@@ -1,0 +1,37 @@
+import {chromium} from 'playwright';
+import assert from 'node:assert/strict';
+import {mkdirSync} from 'node:fs';
+const base=process.env.RADAR_QA_URL??'http://127.0.0.1:3003',day=new Intl.DateTimeFormat('en-CA',{timeZone:'America/Bogota'}).format(new Date()),month=day.slice(0,7);
+const post=(id,line,brand)=>({post_id:id,nombre_creativo:id,producto:line,marca:brand,campana:'',plataforma:'Otra',activo:true,fecha_inicio:month+'-01'});
+const sale=(id,post_id,amount,city='Bogotá')=>({pedido_id:id,post_id,linea:'',fecha_venta:day+'T12:00:00-05:00',ciudad_original:city,ciudad_normalizada:city,departamento:city?'Cundinamarca':'',importe_cop:amount,estado:'confirmado'});
+const snapshot={mode:'live',profile:{user_id:'qa',nombre:'QA',email:'',role:'analista',activo:true},runs:[],catalog:[post('A','Pulsar 180','Bajaj'),post('B','XTZ 125','Yamaha'),post('C','Superlander','Superlander'),post('D','Accesorios','')],sales:[sale('1','A',500),sale('2','A',500),sale('3','B',4000),sale('4','C',null,''),sale('5','C',null,''),sale('6','C',null,'')],interactions:[{post_id:'A',mes:month,interacciones:10},{post_id:'B',mes:month,interacciones:20},{post_id:'C',mes:month,interacciones:0}]};
+const browser=await chromium.launch({headless:true}),page=await browser.newPage({viewport:{width:1500,height:1100}});page.setDefaultTimeout(12000);const errors=[];page.on('pageerror',e=>errors.push(e.message));
+await page.route('**/api/snapshot?**',route=>route.fulfill({json:snapshot}));let exported;
+await page.route('**/api/export?**',route=>{exported=new URL(route.request().url());return route.fulfill({body:'Post ID\nD',contentType:'text/csv'})});
+const header=name=>page.locator('.posts-table').getByRole('columnheader',{name,exact:true});
+const firstId=()=>page.locator('.posts-table tbody tr').first().locator('td strong');
+const expectFirst=async id=>{await firstId().filter({hasText:new RegExp('^'+id+'$')}).waitFor()};
+mkdirSync('tmp/qa',{recursive:true});
+try{
+ await page.goto(base+'/post-id?marca=Yamaha',{waitUntil:'domcontentloaded'});await expectFirst('C');
+ assert.equal(await page.getByLabel('Filtrar por marca',{exact:true}).count(),0);assert.equal(await page.locator('.posts-table tbody tr').count(),4,'Old manufacturer URLs must not hide data after removing the filter');
+ await header('Pedidos').getByRole('button').click();await expectFirst('D');assert.equal(await header('Pedidos').getAttribute('aria-sort'),'ascending');
+ await header('Pedidos').getByRole('button').click();await expectFirst('C');
+ await header('Conversión').getByRole('button').click();await expectFirst('A');assert.equal(await header('Conversión').getAttribute('aria-sort'),'descending');
+ await header('Interacciones').getByRole('button').click();await expectFirst('B');
+ await header('Valor').getByRole('button').click();await expectFirst('B');await header('Valor').getByRole('button').click();await expectFirst('D');
+ assert.equal(await page.locator('.posts-table tbody tr').last().locator('td strong').innerText(),'C','Missing totals must follow real zero amounts');
+ const download=page.waitForEvent('download');await page.getByRole('button',{name:'Exportar CSV',exact:true}).click();await download;assert.equal(exported.searchParams.get('sort'),'value');assert.equal(exported.searchParams.get('dir'),'asc');assert.equal(exported.searchParams.has('marca'),false);
+ for(const name of ['Post ID · Creativo','Línea','Pedidos','Interacciones','Conversión','Valor','Ticket','Participación','Tendencia','Estado']){
+  await header(name).getByRole('button').click();const direction=await header(name).getAttribute('aria-sort');assert(['ascending','descending'].includes(direction));await header(name).getByRole('button').click();assert.notEqual(await header(name).getAttribute('aria-sort'),direction);
+ }
+ await page.screenshot({path:'tmp/qa/post-id-ordenable.png',fullPage:true});
+ await page.getByRole('link',{name:'Interacciones',exact:true}).first().click();await page.getByRole('heading',{name:'Interacciones',exact:true}).waitFor();
+ await page.getByText('Post ID con ventas',{exact:true}).waitFor();await page.getByText('Línea más consultada',{exact:true}).waitFor();assert.equal(await page.getByText('Concentración en los 3 primeros',{exact:true}).count(),0);assert.equal(await page.getByText('Interacciones en ID sin ventas',{exact:true}).count(),0);
+ await page.getByLabel('Filtrar interacciones por línea',{exact:true}).selectOption('XTZ 125');assert((await page.locator('.interaction-insights').innerText()).includes('XTZ 125'));await page.screenshot({path:'tmp/qa/interacciones-indicadores-claros.png',fullPage:true});
+ await page.setViewportSize({width:390,height:844});assert(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));
+ await page.setViewportSize({width:1500,height:1100});await page.getByRole('link',{name:'Ubicaciones',exact:true}).first().click();await page.getByRole('heading',{name:'Ubicaciones',exact:true}).waitFor();
+ await page.getByText('Sin ciudad encontrada',{exact:true}).first().waitFor();assert.equal(await page.getByText('Concentración top 3',{exact:true}).count(),0);await page.getByText('Ventas con ciudad encontrada',{exact:true}).waitFor();
+ const missing=page.locator('.three-kpis .kpi').filter({has:page.getByText('Sin ciudad encontrada',{exact:true})});assert.equal(await missing.locator('.kpi-value').innerText(),'3');
+ assert.deepEqual(errors,[]);console.log('Table sorting passed: every header in both directions, actual order, nulls after zero, CSV direction, no hidden manufacturer filter, clear interaction indicators and city labels, mobile fit.');
+}catch(error){await page.screenshot({path:'tmp/qa/table-sorting-failure.png',fullPage:true});throw error}finally{await browser.close()}

@@ -20,8 +20,8 @@ try{
  await page.getByRole('link',{name:'Post ID',exact:true}).first().click();await page.getByRole('heading',{name:'Post ID',exact:true}).waitFor();
  await page.getByRole('columnheader',{name:'Línea',exact:true}).waitFor();check(await page.getByRole('columnheader',{name:'Marca',exact:true}).count()===0,'Post ID table must omit the brand column');
  const a=page.locator('table tbody tr').filter({has:page.getByText('A',{exact:true})}).first();check((await a.innerText()).includes('20 %'),'Monthly conversion must be 2/10=20%');
- await page.getByLabel('Filtrar por marca',{exact:true}).selectOption('Yamaha');check(await page.locator('table tbody tr').count()===1,'Manufacturer filter must scope posts');
- await page.getByLabel('Filtrar por marca',{exact:true}).selectOption('');await a.click();await page.getByRole('dialog').waitFor();
+ await page.getByLabel('Filtrar Post ID por línea',{exact:true}).selectOption('XTZ 125');check(await page.locator('table tbody tr').count()===1,'Line filter must scope posts');
+ await page.getByLabel('Filtrar Post ID por línea',{exact:true}).selectOption('');await a.click();await page.getByRole('dialog').waitFor();
  await page.getByRole('dialog').getByText('Santander',{exact:true}).waitFor();await page.getByRole('dialog').getByText('Bucaramanga',{exact:true}).waitFor();
  const dailyBars=page.getByRole('dialog').getByRole('group',{name:'Ventas diarias de los últimos 14 días',exact:true});
  check(await dailyBars.getByRole('button').count()===14,'Drawer chart must label each of its 14 days');
@@ -57,10 +57,10 @@ try{
  await page.setViewportSize({width:390,height:844});await page.screenshot({path:'tmp/qa/ubicaciones-linea-mobile.png',fullPage:true});
  check(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),'Location filters must fit on mobile');
  await page.setViewportSize({width:1440,height:1000});
- await page.getByLabel('Filtrar por marca',{exact:true}).selectOption('Bajaj');
- check(await page.getByLabel('Filtrar ubicaciones por línea',{exact:true}).inputValue()==='','Manufacturer change must clear an incompatible line');
- check((await geoPosts.innerText()).includes('Kit Pulsar')&&!(await geoPosts.innerText()).includes('Kit XTZ'),'Manufacturer must scope location Post IDs');
- await page.getByLabel('Filtrar por marca',{exact:true}).selectOption('');
+ await page.getByLabel('Filtrar ubicaciones por línea',{exact:true}).selectOption('Pulsar 180');
+ check(await page.getByLabel('Filtrar ubicaciones por línea',{exact:true}).inputValue()==='Pulsar 180','Selecting a line must retain the selected model');
+ check((await geoPosts.innerText()).includes('Kit Pulsar')&&!(await geoPosts.innerText()).includes('Kit XTZ'),'Line must scope location Post IDs');
+ await page.getByLabel('Filtrar ubicaciones por línea',{exact:true}).selectOption('');
  await page.getByRole('link',{name:'Inicio',exact:true}).first().click();await page.getByRole('heading',{name:'Inicio',exact:true}).waitFor();
  await page.getByRole('button',{name:'Actualizar',exact:true}).click();await page.locator('.toast').filter({hasText:'Carga terminada: datos nuevos.'}).waitFor();
  check(await page.locator('.kpis .kpi').first().locator('.kpi-value').innerText()==='4','Successful sync must refresh the report, not only display a toast');
@@ -76,9 +76,9 @@ try{
  await page.getByLabel('Ordenar publicaciones',{exact:true}).selectOption('interactions');
  check((await page.locator('table tbody tr').first().innerText()).startsWith('B'),'Table must support sorting by interactions');
  await page.getByRole('link',{name:'Catálogo',exact:true}).first().click();await page.getByRole('button',{name:'Agregar Post ID',exact:true}).click();
- const form=page.getByRole('dialog');check(await form.getByLabel('Marca (opcional)',{exact:true}).count()===0,'Adding a post must infer the manufacturer without asking for it');check(await form.getByLabel('Plataforma',{exact:true}).count()===0&&await form.getByLabel('Inicio',{exact:true}).count()===0,'Post form must hide unnecessary platform/date fields');
+ const form=page.getByRole('dialog');check(await form.getByLabel('Marca (opcional)',{exact:true}).count()===0,'Post forms must omit brand');check(await form.getByLabel('Plataforma',{exact:true}).count()===0&&await form.getByLabel('Inicio',{exact:true}).count()===0,'Post form must hide unnecessary platform/date fields');
  await form.getByLabel('Post ID',{exact:true}).fill('NEW-BOXER');await form.getByLabel('Línea',{exact:true}).fill('Boxer');await form.getByRole('button',{name:'Guardar Post ID',exact:true}).click();
- await page.getByRole('dialog').waitFor({state:'hidden'});check(savedPosts[0].producto==='Boxer CT 100'&&savedPosts[0].nombre_creativo==='NEW-BOXER'&&savedPosts[0].marca==='Bajaj','ID + line alone must create a valid post with inferred brand');
+ await page.getByRole('dialog').waitFor({state:'hidden'});check(savedPosts[0].producto==='Boxer CT 100'&&savedPosts[0].nombre_creativo==='NEW-BOXER'&&!Object.hasOwn(savedPosts[0],'marca'),'ID + line alone must create a valid post without brand');
  await page.getByRole('link',{name:'Administración',exact:true}).first().click();await page.getByRole('heading',{name:'Administración',exact:true}).waitFor();
  check(!/Bitácora|Integración|Apps Script|RADAR_TOKEN|Google Sheets · solo lectura/.test(await page.locator('body').innerText()),'Technical integration/audit content must be absent');
  dense=true;await page.getByRole('link',{name:'Ubicaciones',exact:true}).first().click();await page.getByRole('heading',{name:'Ubicaciones',exact:true}).waitFor();await page.reload({waitUntil:'networkidle'});
@@ -92,5 +92,5 @@ try{
  check(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),'Dense location picker must fit mobile');
  await page.setViewportSize({width:1440,height:1000});await page.screenshot({path:'tmp/qa/ubicaciones-ordenadas-desktop.png',fullPage:true});
  check(errors.length===0,'Browser errors: '+errors.join('; '));
- console.log('Report flow passed: current month, month navigation, manufacturer filter, line alias/buttons/top posts, geography, conversion, real refresh and sync-error feedback, mobile layout.');
+ console.log('Report flow passed: current month, month navigation, line filters, line alias/buttons/top posts, geography, conversion, real refresh and sync-error feedback, mobile layout.');
 }catch(error){await page.screenshot({path:'tmp/qa/report-failure.png',fullPage:true});console.error('Failed at',page.url(),(await page.locator('body').innerText()).slice(-700));throw error;}finally{await browser.close();}

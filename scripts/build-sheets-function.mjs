@@ -13,5 +13,5 @@ for(const name of modules){
  shared+=code+'\n';
 }
 const entry=fs.readFileSync('functions/sheets-push.mjs','utf8');
-fs.writeFileSync('functions/sheets-push.bundle.mjs',entry.replace('/* SHARED_PARSER */',shared).replace(/[\t ]+$/gm,'').trimEnd()+'\n');
+fs.writeFileSync('functions/sheets-push.bundle.mjs',entry.replace('/* SHARED_PARSER */',()=>shared).replace(/[\t ]+$/gm,'').trimEnd()+'\n');
 console.log('Generated functions/sheets-push.bundle.mjs');

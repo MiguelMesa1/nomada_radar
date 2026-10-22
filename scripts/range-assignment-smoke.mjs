@@ -1,0 +1,63 @@
+import assert from 'node:assert/strict';
+import {mkdirSync} from 'node:fs';
+import {chromium} from 'playwright';
+const base=process.env.RADAR_QA_URL??'http://127.0.0.1:3003';
+const from='2026-10-10',to='2026-10-12';
+const post={post_id:'A',producto:'',nombre_creativo:'Original',campana:'Original campaign',plataforma:'Facebook',activo:true,fecha_inicio:'2026-01-01'};
+const sale=(id,day)=>({pedido_id:id,post_id:'A',linea:'Sin línea',fecha_venta:day+'T12:00:00-05:00',ciudad_original:'Bogotá',ciudad_normalizada:'Bogotá',departamento:'Cundinamarca',importe_cop:100000,estado:'confirmado'});
+const snapshot={catalog:[post],sales:[sale('1',from),sale('2',to),sale('3','2026-10-09')],interactions:[{post_id:'A',mes:'2026-10',interacciones:999},{post_id:'Z',mes:'2026-10',interacciones:400}],dailyInteractions:[{mes:'2026-10',sin_fecha:0,rows:[{post_id:'A',fecha:from,interacciones:4},{post_id:'A',fecha:to,interacciones:6},{post_id:'A',fecha:'2026-10-09',interacciones:100},{post_id:'Z',fecha:from,interacciones:5}]}],runs:[],profile:{user_id:'qa',nombre:'QA',role:'principal',email:'',activo:true},mode:'live'};
+const browser=await chromium.launch({headless:true});
+const page=await browser.newPage({viewport:{width:1440,height:1000}});page.setDefaultTimeout(20000);
+const errors=[],reads=[],writes=[];let reject=false;
+page.on('pageerror',e=>errors.push(e.message));
+await page.route('**/api/snapshot?**',route=>{reads.push(new URL(route.request().url()));return route.fulfill({json:snapshot})});
+await page.route('**/api/catalog',route=>{
+ const method=route.request().method(),body=route.request().postDataJSON();writes.push({method,body});
+ if(reject)return route.fulfill({status:503,json:{error:'No pudimos guardar la línea. Intenta de nuevo.'}});
+ if(method==='POST')snapshot.catalog.push(body);else snapshot.catalog=snapshot.catalog.map(p=>p.post_id===body.post_id?body:p);
+ return route.fulfill({json:body});
+});
+const assign=id=>page.getByRole('button',{name:`Asignar línea al Post ID ${id}`,exact:true}).filter({visible:true});
+const save=async(value)=>{await page.getByRole('dialog').getByLabel('Línea del Post ID').fill(value);await page.getByRole('dialog').getByRole('button',{name:'Guardar línea',exact:true}).click()};
+mkdirSync('tmp/qa',{recursive:true});
+try{
+ await page.goto(base+'/conversion',{waitUntil:'networkidle'});
+ await page.getByRole('button',{name:'Rango de fechas',exact:true}).click();
+ await page.getByRole('dialog').getByLabel('Desde').fill(from);await page.getByRole('dialog').getByLabel('Hasta').fill(to);
+ await page.getByRole('button',{name:'Aplicar fechas',exact:true}).click();
+ await page.getByRole('button',{name:'Editar rango de fechas',exact:true}).waitFor();
+ await page.locator('.conversion-report .kpi-value').filter({hasText:/^13,3 %$/}).waitFor();
+ assert.equal(reads.at(-1).searchParams.get('from'),from);assert.equal(reads.at(-1).searchParams.get('to'),to);
+ await page.getByRole('button',{name:'Sin línea',exact:true}).click();
+ const a=page.locator('#conversion-detail tbody tr').filter({has:page.getByRole('button',{name:'A',exact:true})});assert.match(await a.innerText(),/20 %/);
+ await assign('A').click();reject=true;await save('Boxer');
+ await page.getByRole('dialog').getByRole('alert').waitFor();assert.equal(snapshot.catalog[0].producto,'');
+ reject=false;await save('Boxer');await page.getByRole('dialog').waitFor({state:'hidden'});
+ await page.getByRole('button',{name:'Boxer CT 100',exact:true}).waitFor();
+ assert.equal(writes.at(-1).method,'PATCH');assert.deepEqual(writes.at(-1).body,{...post,producto:'Boxer CT 100'});
+ // The interaction-only publication has no catalogue row: it must be created.
+ if(!await assign('Z').count())await page.getByRole('button',{name:'Sin línea',exact:true}).click();
+ await assign('Z').click();await save('Accesorios');await page.getByRole('dialog').waitFor({state:'hidden'});
+ await page.getByRole('button',{name:'Accesorios',exact:true}).waitFor();assert.equal(writes.at(-1).method,'POST');
+ assert.equal(snapshot.catalog.find(p=>p.post_id==='Z').producto,'Accesorios');
+ await page.getByRole('link',{name:'Post ID',exact:true}).first().click();
+ await page.waitForURL(url=>url.pathname==='/post-id'&&url.searchParams.get('from')===from);
+ assert.equal(new URL(page.url()).searchParams.get('from'),from);await page.reload({waitUntil:'networkidle'});
+ await page.getByRole('button',{name:'Editar rango de fechas'}).waitFor();assert.equal(await assign('A').count(),0);
+ // Keyboard activation on a row's nested button must open only the line editor.
+ snapshot.catalog[0].producto='Otra marca';await page.reload({waitUntil:'networkidle'});
+ await assign('A').focus();await page.keyboard.press('Enter');
+ await page.getByRole('dialog').getByRole('heading',{name:'Asignar línea',exact:true}).waitFor();assert.equal(await page.getByRole('dialog').count(),1);
+ assert.equal(await page.getByRole('dialog').getByLabel('Línea del Post ID').inputValue(),'Otra marca');
+ await page.keyboard.press('Escape');assert.equal(snapshot.catalog[0].producto,'Otra marca');
+ await assign('A').click();await save('Otra marca');await page.getByRole('dialog').waitFor({state:'hidden'});
+ assert.equal(writes.at(-1).body.producto,'Otra marca');await assign('A').waitFor();
+ await page.setViewportSize({width:390,height:844});await assign('A').click();
+ await page.getByRole('dialog').getByRole('heading',{name:'Asignar línea',exact:true}).waitFor();
+ await page.screenshot({path:'tmp/qa/assign-line-mobile.png',fullPage:true});await save('Pulsar');await page.getByRole('dialog').waitFor({state:'hidden'});
+ await page.locator('.mobile-post').filter({hasText:'Pulsar 180'}).waitFor();assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));
+ await page.screenshot({path:'tmp/qa/range-posts-mobile.png',fullPage:true});
+ snapshot.profile.role='visualizador';snapshot.catalog[0].producto='';await page.reload({waitUntil:'networkidle'});
+ await page.getByRole('heading',{name:'Post ID',exact:true}).waitFor();assert.equal(await assign('A').count(),0);
+ assert.deepEqual(errors,[]);console.log('Custom dates and inline classification passed: daily conversion, range navigation/reload, PATCH metadata, POST for missing catalogue entries, save retry, keyboard/mobile actions, persistence and read-only role.');
+}catch(error){await page.screenshot({path:'tmp/qa/range-assignment-failure.png',fullPage:true});throw error}finally{await browser.close()}

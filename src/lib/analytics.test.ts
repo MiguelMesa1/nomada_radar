@@ -6,6 +6,12 @@ const catalog:CatalogPost[]=[{post_id:'IG-001',nombre_creativo:'Kit',campana:'Ar
 const sale:Sale={pedido_id:'P1',fecha_venta:'2026-10-14T01:00:00-05:00',post_id:'IG-001',ciudad_original:'Bogota',ciudad_normalizada:'Bogotá',departamento:'Cundinamarca',importe_cop:200000,estado:'confirmado',linea:'AKT'};
 const headers=['pedido_id','Fecha','Total del pedido','POST ID','Ciudad','Departamento','Linea'];
 describe('Métricas auditables',()=>{
+ it('acepta ventas Sin ID sin marcarlas como incidencia de calidad',()=>{
+  const batch=parseSheet('Ventas',[headers,['P-SIN-ID','2026-10-14',200000,'','Bogota','Cundinamarca','NS']]);
+  expect(batch.sales).toHaveLength(1);
+  expect(batch.sales[0].post_id).toBe('');
+  expect(batch.issues).toEqual([]);
+ });
  it('preserva ventas sin atribución y post ID con cero ventas',()=>{const m=metrics([sale,{...sale,pedido_id:'P2',post_id:''}],catalog,'2026-10-14','2026-10-14');expect(m.total).toBe(2);expect(m.value).toBe(400000);expect(m.posts[0].share).toBe(50);expect(m.posts[1].orders).toBe(0);expect(m.missing).toBe(1)});
  it('usa fecha de Colombia en los límites del periodo',()=>{const m=metrics([{...sale,fecha_venta:'2026-10-14T02:00:00Z'}],catalog,'2026-10-13','2026-10-13');expect(m.total).toBe(1)});
  it('calcula comparación del periodo anterior',()=>{const m=metrics([sale,{...sale,pedido_id:'P0',fecha_venta:'2026-10-13T12:00:00-05:00'}],catalog,'2026-10-14','2026-10-14');expect(m.previous.length).toBe(1);expect(m.posts[0].previous).toBe(1)});

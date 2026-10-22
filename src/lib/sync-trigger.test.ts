@@ -14,7 +14,13 @@ describe('Protected immediate Sheets sync',()=>{
  });
  it('never announces success for import errors or a Google login page',async()=>{
   vi.stubGlobal('fetch',vi.fn().mockResolvedValueOnce(Response.json({ok:false,error:'Fecha inválida'})).mockResolvedValueOnce(new Response('<html>Login</html>')));
-  await expect(triggerSheetsSync(url,'x')).rejects.toThrow('Fecha inválida');
+  await expect(triggerSheetsSync(url,'x')).rejects.toThrow('Hay fechas inválidas');
   await expect(triggerSheetsSync(url,'x')).rejects.toThrow('solicitó iniciar sesión');
+ });
+ it('does not expose upstream secrets or accept a malformed success response',async()=>{
+  vi.stubGlobal('fetch',vi.fn().mockResolvedValueOnce(Response.json({ok:false,error:'private-token https://docs.google.com/private-sheet'})).mockResolvedValueOnce(Response.json({ok:true,orders:'12'})).mockResolvedValueOnce(Response.json(null)));
+  await expect(triggerSheetsSync(url,'x')).rejects.toThrow('La sincronización no terminó correctamente');
+  await expect(triggerSheetsSync(url,'x')).rejects.toThrow('respuesta de actualización inválida');
+  await expect(triggerSheetsSync(url,'x')).rejects.toThrow('La sincronización no terminó correctamente');
  });
 });

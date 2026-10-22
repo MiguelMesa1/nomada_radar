@@ -5,11 +5,12 @@ Panel privado de Nómada Moto Partes para analizar ventas, publicaciones (Post I
 ## Funcionalidades
 
 - **Inicio:** ventas, valor conocido, ticket promedio, publicaciones, líneas y ciudades líderes.
-- **Post ID:** rendimiento de publicaciones y detalle lateral con ventas diarias, cantidades sobre las barras, fecha al señalar y destinos de los pedidos.
-- **Interacciones:** ranking, evolución diaria, participación, publicaciones sin ventas y conversión. Permite abrir un día desde el gráfico.
-- **Líneas:** comparaciones y publicaciones más vendedoras. Agrupa equivalencias como Pulsar/Pulsar 180, Boxer/Boxer CT 100 y NS/NS 200; Superlander se conserva como grupo propio.
+- **Post ID:** rendimiento de publicaciones, encabezados que ordenan la tabla en ambos sentidos y detalle lateral con ventas diarias, cantidades sobre las barras, fecha al señalar y destinos de los pedidos.
+- **Interacciones:** ranking, evolución diaria, participación, Post ID con ventas, línea más consultada y conversión. Permite abrir un día desde el gráfico.
+- **Conversión:** selecciona Mes, Día o Rango para comparar ventas e interacciones del mismo periodo, incluso entre meses. Los rangos parciales requieren interacciones con fecha; si faltan, la tasa se muestra sin dato. Principal y Analista pueden usar **Asignar línea** junto a un Post ID sin clasificación, sin salir del informe.
+- **Líneas:** botón **Añadir línea** para guardar modelos nuevos, como Pulsar 135, y usarlos en publicaciones y filtros aunque todavía no tengan ventas. Disponible para Principal y Analista. Incluye comparaciones y publicaciones más vendedoras. Agrupa equivalencias como Pulsar/Pulsar 180, Boxer/Boxer CT 100 y NS/NS 200; Superlander se conserva como grupo propio.
 - **Ubicaciones:** mapa y ranking por ciudad o departamento, filtrables por línea y Post ID.
-- **Catálogo:** creación, edición y activación de publicaciones; al crear un ID, su marca se identifica por la línea.
+- **Catálogo:** creación, edición y activación de publicaciones; cada Post ID se clasifica por línea.
 - **Calidad y Administración:** revisión de datos, sincronización y cuentas con roles Principal, Analista y Visualizador.
 - Exportación CSV, temas claro/oscuro, diseño adaptable y estados de carga y error.
 
@@ -33,7 +34,7 @@ También utiliza clsx, class-variance-authority, tailwind-merge, server-only, Au
 
 ## Requisitos
 
-- Node.js **22.13 o superior**; se recomienda Node.js 24.
+- Node.js **24.x**, la misma versión principal utilizada en el alojamiento.
 - npm y Git.
 - Para datos reales: un proyecto InsForge configurado y una cuenta autorizada en Radar.
 - Para sincronizar: acceso a los archivos de Google Sheets y al proyecto Apps Script.
@@ -92,11 +93,14 @@ Cada archivo anual tiene una sola pestaña **Ventas**. Los meses se calculan por
 
 - Columnas: `Fecha`, `POST ID`, `Ciudad`, `Departamento`, `Linea` y `Total del pedido`; `Estado` es opcional.
 - El importe admite `335000`, `$145.000` o `335000 pesos`. Un total vacío se conserva como pendiente, no como cero.
+- También admite miles con comas o espacios (`524,000`, `524 000`), formatos con decimales en cero (`524.000,00`, `524,000.00`, `524000.00`), etiquetas COP/COL$ y pesos colombianos, y unidades explícitas (`524 mil`, `524k`, `1,5 millones`). Los cálculos se conservan en pesos enteros, sin redondear centavos ni adivinar textos con varios precios.
 - **IDS**, en el archivo principal, contiene una columna por línea y sus Post ID debajo.
 - **Conteo POST ID** contiene bloques de interacciones mensuales.
 - **Todos los ID** registra las interacciones. Su columna `Fecha`, en formato `YYYY-MM-DD` o ISO con zona horaria, permite consultar días.
 
 La integración principal usa Apps Script, sin cuenta de servicio. Lee solo las columnas necesarias y no importa nombres, teléfonos ni direcciones de clientes. Un disparador de Google puede ejecutarla cada hora con el computador apagado. **Actualizar** solicita una carga inmediata y vuelve a consultar el informe.
+
+Las pantallas consultan PostgreSQL por el periodo seleccionado; no leen Google Sheets al navegar. La sincronización sí verifica todos los archivos anuales registrados para detectar correcciones históricas y filas omitidas. En PostgreSQL, ventas e interacciones sin cambios no se reescriben. Las incidencias de calidad conservan una sola instantánea vigente, que solo se sustituye cuando cambian los pendientes; los resúmenes de sincronización y la auditoría se conservan.
 
 Consulta [la instalación de Apps Script](integrations/google-apps-script/INSTALACION.md) y [la actualización desde Radar](integrations/google-apps-script/ACTUALIZAR-DESDE-RADAR.md). Los IDs de archivos y el endpoint se configuran en las propiedades de la secuencia de comandos. El código versionado no contiene enlaces de hojas de una instalación particular.
 
@@ -143,6 +147,10 @@ Los scripts usan Playwright instalado en el proyecto y datos de prueba controlad
 
 ## Producción
 
+La app usa sesiones HttpOnly, verificación de roles en servidor y RLS, límites compartidos de peticiones y escritura, CSP con nonce y respuestas privadas sin caché. Los cambios de acceso y de clasificación quedan auditados. Las referencias de ventas muestran hoja y fila sin enlaces directos al archivo de origen.
+
+La seguridad de Radar no protege una hoja de origen compartida públicamente. Antes de tratar la instalación como privada, el bot que carga ventas debe usar una cuenta autorizada y los archivos deben tener acceso restringido. Ocultar enlaces dentro de la app no sustituye esos permisos. Configura el origen HTTPS exacto en `RADAR_APP_ORIGIN`, usa claves exclusivas del servidor y cambia las contraseñas iniciales antes de publicar.
+
 ```powershell
 npm ci
 npm run build
@@ -150,6 +158,8 @@ npm run start
 ```
 
 Configura las variables privadas en el alojamiento, usa HTTPS y conserva el origen correcto. La app incluye roles, límites de solicitudes, comprobación de origen, cookies HttpOnly, CSP y validación. La protección volumétrica de red depende también del proveedor de alojamiento.
+
+Consulta [la publicación en Vercel](DEPLOYMENT.md) para configurar un proyecto separado, las variables y las comprobaciones previas. No se necesita un cron de Vercel: el disparador horario permanece en Google Apps Script.
 
 ## Archivos excluidos de Git
 

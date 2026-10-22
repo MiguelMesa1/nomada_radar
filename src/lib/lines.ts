@@ -1,15 +1,15 @@
 import { aggregate, normalize, toCSV } from './analytics';
 import type { Sale } from './types';
-import { canonicalLine } from './classification';
+import { canonicalLine,isMissingLine } from './classification';
 
-export const brandId = (sale: Sale) => normalize(canonicalLine(sale.linea)) ? `brand:${normalize(canonicalLine(sale.linea))}` : 'missing';
+export const lineId = (sale: Sale) => isMissingLine(sale.linea) ? 'missing' : `line:${normalize(canonicalLine(sale.linea))}`;
 
-export function brandMetrics(current: Sale[], previous: Sale[]) {
+export function lineMetrics(current: Sale[], previous: Sale[]) {
   const groups = new Map<string, Sale[]>();
   const previousCounts = new Map<string, number>();
-  for (const sale of previous) previousCounts.set(brandId(sale), (previousCounts.get(brandId(sale)) ?? 0) + 1);
+  for (const sale of previous) previousCounts.set(lineId(sale), (previousCounts.get(lineId(sale)) ?? 0) + 1);
   for (const sale of current) {
-    const id = brandId(sale);
+    const id = lineId(sale);
     const rows = groups.get(id) ?? [];
     rows.push(sale);
     groups.set(id, rows);
@@ -31,10 +31,10 @@ export function brandMetrics(current: Sale[], previous: Sale[]) {
   }).sort((a, b) => b.orders - a.orders || a.name.localeCompare(b.name, 'es'));
 }
 
-export function brandsCSV(current: Sale[], previous: Sale[], selected = '') {
+export function linesCSV(current: Sale[], previous: Sale[], selected = '') {
   return toCSV(
     ['Línea', 'Ventas', 'Valor conocido COP', 'Ticket COP (solo totales conocidos)', 'Participación %', 'Ventas periodo anterior', 'Variación %', 'Ciudades con ventas', 'Ciudad líder', 'Departamento líder', 'Ventas ciudad líder', 'Ventas con total', 'Totales pendientes', 'Ciudad', 'Departamento', 'Ventas en ciudad', 'Participación en línea %', 'Valor conocido ciudad COP', 'Totales pendientes ciudad'],
-    brandMetrics(current, previous).filter(b => !selected || b.id === selected).flatMap(b => b.cities.map(c => [
+    lineMetrics(current, previous).filter(b => !selected || b.id === selected).flatMap(b => b.cities.map(c => [
       b.name, b.orders, b.pricedOrders ? b.value : null, b.ticket, b.share, b.previousOrders, b.change,
       b.cityCount, b.topCity?.name, b.topCity?.department, b.topCity?.orders, b.pricedOrders, b.pendingTotals,
       c.name, c.department, c.orders, c.orders / b.orders * 100, c.pricedOrders ? c.value : null, c.pendingTotals,

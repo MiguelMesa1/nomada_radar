@@ -10,6 +10,7 @@ assert.equal(denied.status,401,`unauthorized probe returned ${denied.status}`);
 const ready=await request({probe:true},true);const result=await ready.json();
 assert.equal(ready.status,200,JSON.stringify(result));assert.equal(result.ready,true);
 assert.equal(result.parser,true,'Deployed date parser must accept a valid sale with a pending total');
+assert.equal(result.currencyFormats,true,'Deployed price parser must accept the supported COP formats and reject multiple prices');
 const invalid=await request({version:1,sheets:[]},true);
 assert.equal(invalid.status,422);
 console.log('Live receiver: unauthorized=401, authorized backend readiness=200, invalid payload=422. No sales or sync runs created.');

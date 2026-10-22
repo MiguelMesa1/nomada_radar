@@ -25,4 +25,11 @@ describe('Shared rate limits',()=>{
   const r=new Request('http://localhost',{headers:{'x-forwarded-for':'1.2.3.4','x-real-ip':'5.6.7.8'}});
   expect(requestIdentity(r)).toBe('shared-origin');vi.stubEnv('RADAR_TRUST_PROXY_HEADER','x-real-ip');expect(requestIdentity(r)).toBe('5.6.7.8');
  });
+ it('separates trusted deployment IPs without accepting a forged generic forwarding header',()=>{
+  vi.stubEnv('VERCEL','1');
+  const first=new Request('https://radar.example',{headers:{'x-vercel-forwarded-for':'203.0.113.1','x-forwarded-for':'198.51.100.99'}});
+  const second=new Request('https://radar.example',{headers:{'x-vercel-forwarded-for':'203.0.113.2'}});
+  expect(requestIdentity(first)).toBe('203.0.113.1');expect(requestIdentity(second)).toBe('203.0.113.2');
+  expect(requestIdentity(new Request('https://radar.example',{headers:{'x-forwarded-for':'198.51.100.99'}}))).toBe('shared-origin');
+ });
 });

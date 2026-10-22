@@ -8,6 +8,15 @@ import { requireProfile } from './server';
 import { loadSnapshot } from './data';
 
 describe('Snapshot loading', () => {
+ it('reapplies saved sale lines on a fresh snapshot while preserving the imported value',async()=>{
+  const sale={pedido_id:'row-1046',post_id:'',fecha_venta:'2026-10-14T17:00:00Z',linea:'Sin línea'};
+  const query=(rows:unknown[])=>{const chain:any={select:()=>chain,gte:()=>chain,lte:()=>chain,in:()=>chain,order:()=>chain,limit:()=>Promise.resolve({data:rows}),range:()=>Promise.resolve({data:rows})};return chain};
+  const from=vi.fn((table:string)=>query(table==='sales_orders'?[sale]:table==='sale_line_overrides'?[{pedido_id:sale.pedido_id,fecha_venta:'2026-10-14T12:00:00-05:00',linea:'XTZ 125'}]:[]));
+  vi.mocked(requireProfile).mockResolvedValue({profile:{user_id:'qa'},client:{database:{from}}} as never);
+  const snapshot=await loadSnapshot('2026-10-01','2026-10-31');
+  expect(snapshot.sales).toEqual([{...sale,linea:'XTZ 125',linea_importada:'Sin línea'}]);
+  expect(sale.linea).toBe('Sin línea');
+ });
  it('starts sales before the catalog finishes and preserves all paginated orders', async () => {
   let finishCatalog!:(value:unknown)=>void;
   const catalog = new Promise(resolve => { finishCatalog=resolve; });

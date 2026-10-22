@@ -35,7 +35,6 @@ export function parseSheet(sheet:string,rows:unknown[][],aliases:CityAlias[]=[],
   const original=String(row[c.city]??'').trim(),dept=String(row[c.department]??'').trim(),alias=aliases.find(a=>normalize(a.alias)===normalize(original)&&normalize(a.departamento)===normalize(dept));
   const canonical=alias?.ciudad_canonica??knownCities[normalize(original)]??'';
   const post_id=String(row[c.post]??'').trim().toUpperCase();
-  if(!post_id)issues.push({sheet,row:i+1,type:'missing_post',message:'Pedido sin Post ID',pedido_id:id});
   if(!canonical)issues.push({sheet,row:i+1,type:'city',message:'Ciudad pendiente de normalizar',pedido_id:id});
   if(pendingAmount)issues.push({sheet,row:i+1,type:'missing_total',message:'Total del pedido pendiente; la venta sí cuenta',pedido_id:id});
   sales.push({pedido_id:id,fecha_venta:date,post_id,ciudad_original:original,ciudad_normalizada:canonical,departamento:dept,importe_cop:amount,estado:state,linea:lineCol<0?'':String(row[lineCol]??'').trim()});

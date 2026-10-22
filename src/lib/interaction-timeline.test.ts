@@ -25,9 +25,9 @@ describe('Daily Post ID movement',()=>{
  });
  it('daily rankings use the day count instead of the monthly denominator',()=>{
   vi.useFakeTimers();vi.setSystemTime(new Date('2026-10-16T17:00:00Z'));
-  const snapshot:Snapshot={mode:'live',profile:{user_id:'qa',nombre:'QA',email:'',activo:true,role:'analista'},runs:[],catalog:[{post_id:'A',nombre_creativo:'A',marca:'Bajaj',producto:'Pulsar 180',campana:'',activo:true,plataforma:'Otra',fecha_inicio:''}],sales:[{pedido_id:'1',post_id:'A',linea:'Pulsar 180',fecha_venta:'2026-10-16T12:00:00-05:00',ciudad_original:'Bogotá',ciudad_normalizada:'Bogotá',departamento:'Cundinamarca',importe_cop:null,estado:'confirmado'}],interactions:[{post_id:'A',mes:'2026-10',interacciones:999}],dailyInteractions:daily};
-  const row=interactionRanking(snapshot,dayRange('2026-10-16'),'Bajaj')[0];
+  const snapshot:Snapshot={mode:'live',profile:{user_id:'qa',nombre:'QA',email:'',activo:true,role:'analista'},runs:[],catalog:[{post_id:'A',nombre_creativo:'A',producto:'Pulsar 180',campana:'',activo:true,plataforma:'Otra',fecha_inicio:''}],sales:[{pedido_id:'1',post_id:'A',linea:'Pulsar 180',fecha_venta:'2026-10-16T12:00:00-05:00',ciudad_original:'Bogotá',ciudad_normalizada:'Bogotá',departamento:'Cundinamarca',importe_cop:null,estado:'confirmado'}],interactions:[{post_id:'A',mes:'2026-10',interacciones:999}],dailyInteractions:daily};
+  const row=interactionRanking(snapshot,dayRange('2026-10-16')).find(row=>row.post.post_id==='A')!;
   expect(row.interactions).toBe(7);expect(row.post.orders).toBe(1);expect(row.rate).toBeCloseTo(100/7);
-  const previous=interactionRanking(snapshot,dayRange('2026-10-15'),'Bajaj')[0];expect(previous.interactions).toBe(3);expect(previous.post.orders).toBe(0);
+  const previous=interactionRanking(snapshot,dayRange('2026-10-15')).find(row=>row.post.post_id==='A')!;expect(previous.interactions).toBe(3);expect(previous.post.orders).toBe(0);
  });
 });

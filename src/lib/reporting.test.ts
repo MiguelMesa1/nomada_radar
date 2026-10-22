@@ -1,12 +1,12 @@
 import {afterEach,describe,expect,it,vi} from 'vitest';
-import {canonicalLine,manufacturer,postBrand} from './classification';
+import {canonicalLine} from './classification';
 import {monthRange,shiftMonth} from './report-period';
 import {comparisonRange,parseCOP} from './analytics';
 import {conversionForPost} from './conversion';
 import {parseInteractionBlocks} from './interaction-import';
 import {parsePush,pushHeaders} from './sheets-push';
 afterEach(()=>vi.useRealTimers());
-describe('Monthly reports and manufacturer classification',()=>{
+describe('Monthly reports and line classification',()=>{
  it('accepts the owner currency formats without mistaking blanks or invalid amounts for zero',()=>{
   expect(parseCOP('335000 pesos')).toBe(335000);expect(parseCOP('$145.000')).toBe(145000);expect(parseCOP('335000')).toBe(335000);
   expect(parseCOP('COP 335.000,00')).toBe(335000);expect(parseCOP('')).toBeNull();expect(parseCOP('-335000 pesos')).toBeNull();expect(parseCOP('335000 y 145000 pesos')).toBeNull();
@@ -22,13 +22,9 @@ describe('Monthly reports and manufacturer classification',()=>{
   expect(comparisonRange('2026-10-01','2026-10-16')).toEqual({from:'2026-09-01',to:'2026-09-16'});
   expect(comparisonRange('2026-09-01','2026-09-30')).toEqual({from:'2026-08-01',to:'2026-08-31'});
  });
- it('merges Pulsar aliases and separates manufacturer from model with explicit override',()=>{
+ it('merges aliases of the same product line',()=>{
   expect(canonicalLine(' pulsar ')).toBe('Pulsar 180');
   expect(canonicalLine('PULSAR 180')).toBe('Pulsar 180');
-  expect(manufacturer('Pulsar')).toBe('Bajaj');
-  expect(manufacturer('XTZ 125')).toBe('Yamaha');
-  expect(manufacturer('Accesorios')).toBe('Sin marca');
-  expect(postBrand({marca:'Honda',producto:'Accesorios'} as never)).toBe('Honda');
  });
 });
 describe('Monthly conversion uses matching denominators',()=>{

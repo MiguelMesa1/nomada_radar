@@ -11,8 +11,8 @@ export function dayRange(day=colombiaDay(new Date())){
  return {from:day,to:day};
 }
 export function shiftDay(day:string,delta:number){const value=new Date(dayRange(day).from+'T12:00:00-05:00');value.setUTCDate(value.getUTCDate()+delta);return colombiaDay(value);}
-export function periodLabel(from:string,to:string){
+export function periodLabel(from:string,to:string,mode?:string){
  if(from===to)return new Intl.DateTimeFormat('es-CO',{day:'numeric',month:'long',year:'numeric',timeZone:'America/Bogota'}).format(new Date(from+'T12:00:00-05:00'));
- if(from.endsWith('-01')&&from.slice(0,7)===to.slice(0,7))return new Intl.DateTimeFormat('es-CO',{month:'long',year:'numeric',timeZone:'America/Bogota'}).format(new Date(from+'T12:00:00-05:00'));
+ if(mode!=='Fechas'&&from.endsWith('-01')&&from.slice(0,7)===to.slice(0,7))return new Intl.DateTimeFormat('es-CO',{month:'long',year:'numeric',timeZone:'America/Bogota'}).format(new Date(from+'T12:00:00-05:00'));
  return `${from} al ${to}`;
 }

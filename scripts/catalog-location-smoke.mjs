@@ -1,0 +1,37 @@
+import assert from 'node:assert/strict';
+import {mkdirSync} from 'node:fs';
+import {chromium} from 'playwright';
+const base=process.env.RADAR_QA_URL??'http://127.0.0.1:3003';
+const day=new Intl.DateTimeFormat('en-CA',{timeZone:'America/Bogota'}).format(new Date());
+const post=(post_id,producto,activo=true)=>({post_id,producto,activo,nombre_creativo:post_id,campana:'',plataforma:'Otra',fecha_inicio:day});
+const sale=(post_id,linea)=>({post_id,linea,pedido_id:post_id,fecha_venta:day+'T12:00:00-05:00',ciudad_original:'Bogotá',ciudad_normalizada:'Bogotá',departamento:'Cundinamarca',importe_cop:null,estado:'confirmado'});
+const snapshot={mode:'live',profile:{user_id:'qa',nombre:'QA',email:'',role:'principal',activo:true},catalog:[post('A','Pulsar 180'),post('B',''),post('C','Otra marca'),post('D','Otra línea',false),post('E','NS 200')],sales:[sale('A','Otra Marca'),sale('B','OTRA MARCA'),sale('E','NS 200')],runs:[],interactions:[]};
+const browser=await chromium.launch({headless:true}),page=await browser.newPage({viewport:{width:1440,height:1000},reducedMotion:'reduce'});page.setDefaultTimeout(20000);
+const errors=[];page.on('pageerror',error=>errors.push(error.message));
+await page.route('**/api/snapshot?**',route=>route.fulfill({json:snapshot}));
+const ids=()=>page.locator('table tbody tr td:first-child').allTextContents();
+mkdirSync('tmp/qa',{recursive:true});
+try{
+ await page.goto(base+'/ubicaciones',{waitUntil:'domcontentloaded'});
+ await page.getByLabel('Filtrar ubicaciones por línea').selectOption('Otra marca');
+ await page.getByRole('heading',{name:'Post IDs de Otra marca',exact:true}).waitFor();
+ const locationIds=(await page.locator('.geo-post-card>b').allTextContents()).sort();assert.deepEqual(locationIds,['A','B','C','D']);
+ await page.getByRole('link',{name:'Catálogo',exact:true}).first().click();
+ const line=page.getByLabel('Filtrar catálogo por línea');await line.selectOption('other');assert.deepEqual((await ids()).sort(),locationIds);
+ await page.locator('table tbody tr').filter({has:page.getByRole('button',{name:'A',exact:true})}).getByText('En ventas: Otra marca',{exact:true}).waitFor();
+ const lineBox=await line.boundingBox(),statusBox=await page.getByRole('group',{name:'Estado de las publicaciones'}).boundingBox();
+ assert.ok(Math.abs(lineBox.y-statusBox.y)<1,'Desktop line and status controls must align');
+ await page.getByRole('button',{name:'Activos',exact:true}).click();assert.deepEqual(await ids(),['A','B','C']);
+ await page.getByRole('button',{name:'Inactivos',exact:true}).click();assert.deepEqual(await ids(),['D']);
+ await page.getByRole('button',{name:'Todos',exact:true}).click();await page.getByLabel('Buscar en catálogo').fill('A');assert.ok((await ids()).includes('A'));
+ await page.getByLabel('Buscar en catálogo').fill('');await page.screenshot({path:'tmp/qa/catalog-filters-desktop.png',fullPage:true});
+ await page.setViewportSize({width:390,height:844});await line.selectOption('other');
+ assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));
+ const mobileLine=await line.boundingBox(),mobileStatus=await page.getByRole('group',{name:'Estado de las publicaciones'}).boundingBox();
+ assert.ok(mobileStatus.y>=mobileLine.y+mobileLine.height,'Mobile status buttons must sit below the line selector');
+ await page.screenshot({path:'tmp/qa/catalog-filters-mobile.png',fullPage:true});
+ await page.setViewportSize({width:1440,height:1000});await page.getByLabel('Mes del informe').fill('2025-01');
+ await page.locator('table tbody').getByRole('button',{name:'C',exact:true}).waitFor();await page.locator('table tbody').getByRole('button',{name:'A',exact:true}).waitFor({state:'hidden'});assert.deepEqual(await ids(),['C','D']);
+ assert.equal(snapshot.catalog[0].producto,'Pulsar 180');assert.deepEqual(errors,[]);
+ console.log('Catalog/location parity passed: Other aliases, differing saved/imported lines, status and search, selected-month scope, original values, desktop alignment and mobile wrapping.');
+}catch(error){await page.screenshot({path:'tmp/qa/catalog-location-failure.png',fullPage:true});throw error}finally{await browser.close()}

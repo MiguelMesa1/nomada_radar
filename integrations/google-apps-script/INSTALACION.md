@@ -34,7 +34,7 @@ El orden de columnas es libre. Se leen únicamente:
 | POST ID | Encabezado obligatorio; una celda vacía cuenta como venta sin atribuir. |
 | Ciudad | Encabezado obligatorio. |
 | Departamento | Encabezado obligatorio. |
-| Total Pedido o Total del pedido | COP, admite `335000 pesos`, `$145.000` y `335000`. Puede faltar en históricos. Vacío significa pendiente, no cero. |
+| Total Pedido o Total del pedido | COP: `524.000 pesos`, `$524.000`, `COP 524000`, `524,000.00`, `524 000`, `524 mil` o `1,5 millones`. Puede faltar en históricos. Vacío significa pendiente, no cero. Se admiten decimales en cero, sin redondear centavos ni sumar varios importes escritos en una celda. |
 | Linea | Opcional. |
 | Estado | Opcional; vacío significa confirmado. Para cancelaciones usa cancelado. |
 

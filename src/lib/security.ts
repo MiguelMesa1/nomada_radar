@@ -1,6 +1,7 @@
 import 'server-only';
 import {createHmac} from 'node:crypto';
-import {isIP} from 'node:net';
+import {requestIdentity} from './request-identity';
+export {requestIdentity} from './request-identity';
 import {adminClient,sameOrigin} from './server';
 import {AppError} from './errors';
 import {BurstLimiter,validateRequestSize} from './http-security';
@@ -9,15 +10,6 @@ export type Action='login'|'recover'|'refresh'|'read'|'export'|'write'|'admin'|'
 const policy:Record<Action,[number,number]>={login:[12,600],recover:[8,1800],refresh:[30,60],read:[90,60],export:[8,60],write:[30,60],admin:[12,60],sync:[3,300],logout:[20,60]};
 const burst=new BurstLimiter();
 function hash(value:string){const secret=process.env.INSFORGE_API_KEY;if(!secret)throw new AppError('La protección de acceso no está disponible.',503);return createHmac('sha256',secret).update(value).digest('hex')}
-export function requestIdentity(request:Request){
- // Ignore arbitrary X-Forwarded-For by default. A proxy header can be trusted
- // only when that proxy overwrites it and direct origin access is blocked.
- const header=process.env.VERCEL==='1'?'x-vercel-forwarded-for':process.env.RADAR_TRUST_PROXY_HEADER;
- if(header&&['x-vercel-forwarded-for','x-real-ip','x-forwarded-for'].includes(header)){
-  const candidate=request.headers.get(header)?.split(',')[0]?.trim();if(candidate&&isIP(candidate))return candidate;
- }
- return 'shared-origin';
-}
 export async function consumeLimits(limits:{key:string;limit:number;seconds:number}[]){
  const {data,error}=await adminClient().database.rpc('radar_consume_limits',{p_limits:limits.map(v=>({key:hash(v.key),limit:v.limit,seconds:v.seconds}))});
  if(error||!data||typeof data.allowed!=='boolean')throw new AppError('La protección de acceso no está disponible. Intenta más tarde.',503);

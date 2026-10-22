@@ -18,12 +18,14 @@ try{
  await page.goto(base+'/interacciones',{waitUntil:'domcontentloaded'});await page.getByRole('heading',{name:'Interacciones',exact:true}).waitFor();
  await expectText(kpi('Interacciones recibidas'),'120');await expectText(kpi('Ventas con interacciones'),'3');await expectText(kpi('Conversión a ventas'),'2,5 %');
  assert((await page.locator('.interaction-leaders li').first().innerText()).includes('B'));
+ await page.locator('.interaction-leaders li').first().getByText('Línea: XTZ 125',{exact:true}).waitFor();
+ await page.locator('.interaction-leaders li').filter({has:page.getByText('E',{exact:true})}).getByText('Línea: Sin línea',{exact:true}).waitFor();
  assert.equal(await page.locator('.interactions-table tbody tr').count(),10);
  await page.getByRole('navigation',{name:'Páginas de interacciones'}).getByRole('button',{name:'Siguiente'}).click();assert.equal(await page.locator('.interactions-table tbody tr').count(),6);
  await page.getByLabel('Buscar interacciones',{exact:true}).fill('E');await expectText(kpi('Interacciones recibidas'),'20');
- await page.locator('.interactions-table').getByRole('button',{name:'E',exact:true}).click();await page.getByRole('dialog').waitFor();await page.getByRole('dialog').getByText('E · Sin línea · Sin marca',{exact:true}).waitFor();await page.keyboard.press('Escape');
- await page.getByLabel('Buscar interacciones',{exact:true}).fill('');await page.getByLabel('Filtrar por marca',{exact:true}).selectOption('Bajaj');await expectText(kpi('Conversión a ventas'),'20 %');assert.equal(await page.locator('.interactions-table tbody tr').count(),1);
- await page.getByLabel('Filtrar por marca',{exact:true}).selectOption('');await page.getByLabel('Filtrar interacciones por línea',{exact:true}).selectOption('XTZ 125');await expectText(kpi('Interacciones recibidas'),'90');
+ await page.locator('.interactions-table').getByRole('button',{name:'E',exact:true}).click();await page.getByRole('dialog').waitFor();await page.getByRole('dialog').getByRole('button',{name:'Asignar línea al Post ID E',exact:true}).waitFor();await page.getByRole('dialog').getByText('Sin línea',{exact:true}).first().waitFor();await page.keyboard.press('Escape');
+ await page.getByLabel('Buscar interacciones',{exact:true}).fill('');await page.getByLabel('Filtrar interacciones por línea',{exact:true}).selectOption('Pulsar 180');await expectText(kpi('Conversión a ventas'),'20 %');assert.equal(await page.locator('.interactions-table tbody tr').count(),1);
+ await page.getByLabel('Filtrar interacciones por línea',{exact:true}).selectOption('');await page.getByLabel('Filtrar interacciones por línea',{exact:true}).selectOption('XTZ 125');await expectText(kpi('Interacciones recibidas'),'90');
  const download=page.waitForEvent('download');await page.getByRole('button',{name:'Exportar CSV',exact:true}).click();await download;
  assert.equal(exported.searchParams.get('view'),'interacciones');assert.equal(exported.searchParams.get('line'),'XTZ 125');
  await page.getByLabel('Filtrar interacciones por línea',{exact:true}).selectOption('');await page.getByLabel('Ordenar interacciones',{exact:true}).selectOption('conversion');assert((await page.locator('.interactions-table tbody tr').first().innerText()).startsWith('A'));
@@ -35,5 +37,5 @@ try{
  await page.getByRole('button',{name:'Mes actual',exact:true}).click();await expectText(kpi('Interacciones recibidas'),'120');
  await page.getByRole('link',{name:'Inicio',exact:true}).first().click();await page.getByRole('heading',{name:'Inicio',exact:true}).waitFor();assert.equal(await page.locator('.interaction-leaders').count(),0);
  await page.getByRole('link',{name:'Post ID',exact:true}).first().click();await page.getByRole('heading',{name:'Post ID',exact:true}).waitFor();assert.equal(await page.locator('.interaction-leaders').count(),0);
- assert.deepEqual(errors,[]);console.log('Interactions passed: pooled conversion, missing/zero counts, orphan ID detail, ranking, pagination, brand/line filters, export request, mobile navigation, dark/light layouts, empty month and no duplicate panels.');
+ assert.deepEqual(errors,[]);console.log('Interactions passed: pooled conversion, missing/zero counts, orphan ID detail, ranking, pagination, line filters, export request, mobile navigation, dark/light layouts, empty month and no duplicate panels.');
 }catch(error){await page.screenshot({path:'tmp/qa/interacciones-failure.png',fullPage:true});throw error}finally{await browser.close()}

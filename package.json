@@ -8,8 +8,8 @@
     "start": "next start --hostname 127.0.0.1",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
-    "test:browser": "node scripts/reporting-smoke.mjs && node scripts/interactions-smoke.mjs && node scripts/daily-smoke.mjs",
-    "build:receiver": "node scripts/build-sheets-function.mjs",
+    "test:browser": "node scripts/reporting-smoke.mjs && node scripts/interactions-smoke.mjs && node scripts/daily-smoke.mjs && node scripts/table-sorting-smoke.mjs && node scripts/conversion-smoke.mjs && node scripts/range-assignment-smoke.mjs && node scripts/idle-session-smoke.mjs && node scripts/sale-line-smoke.mjs && node scripts/line-catalog-smoke.mjs && node scripts/catalog-filter-smoke.mjs && node scripts/catalog-location-smoke.mjs",
+    "build:receiver": "node scripts/build-sheets-function.mjs && node --check functions/sheets-push.bundle.mjs",
     "build:apps-script": "node scripts/build-apps-script.mjs"
   },
   "dependencies": {
@@ -39,6 +39,6 @@
     "vitest": "5.0.4"
   },
   "engines": {
-    "node": ">=22.13.0"
+    "node": "24.x"
   }
 }
