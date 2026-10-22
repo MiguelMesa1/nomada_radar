@@ -38,7 +38,7 @@ Después de modificar variables, genera un nuevo despliegue. Las variables públ
 
 ## Consumo y sincronización
 
-- Google Apps Script mantiene el disparador de una hora; no añadas otro programador en Vercel.
+- Google Apps Script mantiene el disparador de cuatro horas; no añadas otro programador en Vercel.
 - Navegar y cambiar fechas consulta PostgreSQL, no los archivos de Sheets.
 - **Actualizar** ejecuta una verificación completa del origen. Sin un ID de pedido estable no debe sustituirse por una lectura exclusiva de las últimas filas: se perderían correcciones anteriores.
 - Los datos sin cambios no generan versiones nuevas de ventas o interacciones. Los pendientes de calidad se guardan como estado vigente, evitando otra copia por hora.

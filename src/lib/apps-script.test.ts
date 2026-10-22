@@ -70,13 +70,25 @@ describe('Google Apps Script adapter',()=>{
   expect(()=>context.sincronizarRadar()).toThrow('una sola pestaña llamada Ventas');
   expect(posted).toBe(false);expect(props.RADAR_ULTIMO_RESULTADO).toContain('ERROR');
  });
- it('keeps exactly one hourly trigger owned by the installer and creates none on failure',()=>{
-  const {context}=setup();let created=0;const removed:unknown[]=[];
-  const trigger=()=>({getHandlerFunction:()=> 'sincronizarRadar'});
-  context.ScriptApp={getProjectTriggers:()=>[trigger(),trigger()],deleteTrigger:(t:unknown)=>removed.push(t),newTrigger:()=>{created++;return{timeBased:()=>({everyHours:(n:number)=>{expect(n).toBe(1);return{create:()=>{}};}})};}};
+ it('replaces hourly duplicates with one four-hour trigger and preserves unrelated jobs on repeated installs',()=>{
+  const {context}=setup();
+  const unrelated={getHandlerFunction:()=> 'otraTarea',hours:1};
+  let triggers=[{getHandlerFunction:()=> 'sincronizarRadar',hours:1},{getHandlerFunction:()=> 'sincronizarRadar',hours:1},unrelated];
+  context.ScriptApp={getProjectTriggers:()=>[...triggers],deleteTrigger:(t:unknown)=>{triggers=triggers.filter(v=>v!==t)},newTrigger:(handler:string)=>({timeBased:()=>({everyHours:(hours:number)=>({create:()=>{triggers.push({getHandlerFunction:()=>handler,hours})}})})})};
+  context.SpreadsheetApp={getUi:()=>({alert:()=>{}})};context.sincronizarRadar=()=>{};
+  for(let i=0;i<3;i++){
+   context.instalarRadar();
+   expect(triggers.filter(t=>t.getHandlerFunction()==='sincronizarRadar').map(t=>t.hours)).toEqual([4]);
+   expect(triggers).toContain(unrelated);
+  }
+ });
+ it('preserves the existing schedule when validation or creation fails',()=>{
+  const {context}=setup();let created=0,removed=0;
+  context.ScriptApp={getProjectTriggers:()=>[{getHandlerFunction:()=> 'sincronizarRadar'}],deleteTrigger:()=>{removed++},newTrigger:()=>{created++;throw Error('Cuota de Google')}};
   context.SpreadsheetApp={getUi:()=>({alert:()=>{}})};
-  context.sincronizarRadar=()=>{};context.instalarRadar();expect(created).toBe(0);expect(removed).toHaveLength(1);
-  context.ScriptApp.getProjectTriggers=()=>[];context.instalarRadar();expect(created).toBe(1);
-  context.sincronizarRadar=()=>{throw Error('Google sin acceso');};expect(()=>context.instalarRadar()).toThrow();expect(created).toBe(1);
+  context.sincronizarRadar=()=>{throw Error('Google sin acceso')};
+  expect(()=>context.instalarRadar()).toThrow('Google sin acceso');expect(created).toBe(0);expect(removed).toBe(0);
+  context.sincronizarRadar=()=>{};
+  expect(()=>context.instalarRadar()).toThrow('Cuota de Google');expect(created).toBe(1);expect(removed).toBe(0);
  });
 });

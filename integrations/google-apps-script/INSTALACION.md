@@ -19,10 +19,10 @@ En cada archivo debe existir una sola pestaña `Ventas`, con encabezados en la f
 2. Reemplaza todo `Código.gs` por el contenido de `NomadaRadar.gs` de esta carpeta y guarda. Usa un solo proyecto de Apps Script para los dos años.
 3. En **Configuración del proyecto → Propiedades del script**, crea las cuatro propiedades de la tabla anterior. Para `RADAR_TOKEN`, el valor está después de `RADAR_TOKEN=` en el archivo local `.env.radar-script.local` de la raíz del proyecto. Si ya lo configuraste, conserva su valor. No uses la clave administrativa de InsForge.
 4. Selecciona **instalarRadar**, pulsa **Ejecutar** y autoriza con la cuenta de Google que puede leer ambos archivos.
-5. Primero se completa una carga válida; después se instala el disparador **cada hora**, evitando duplicar los disparadores de esa misma cuenta.
+5. Primero se completa una carga válida; después se instala el disparador **cada 4 horas**, sustituyendo los disparadores anteriores de sincronización de esa misma cuenta.
 6. Recarga el Sheets para ver el menú **Nómada Radar**. En la app entra con tu cuenta real y pulsa **Actualizar**. El modo `?demo=1` muestra datos ficticios.
 
-Para la carga horaria no necesitas desplegarlo como aplicación web. Para el botón inmediato de Radar sigue ACTUALIZAR-DESDE-RADAR.md. No necesitas cuenta de servicio ni publicar tu hoja. Puede funcionar con el computador apagado, mientras Google y el proyecto InsForge estén disponibles. El horario solo se activa después de autorizar y ejecutar `instalarRadar`.
+Para la carga automática cada 4 horas no necesitas desplegarlo como aplicación web. Para el botón inmediato de Radar sigue ACTUALIZAR-DESDE-RADAR.md. No necesitas cuenta de servicio ni publicar tu hoja. Puede funcionar con el computador apagado, mientras Google y el proyecto InsForge estén disponibles. El horario solo se activa después de autorizar y ejecutar `instalarRadar`.
 
 ## Encabezados y ventas
 
@@ -87,7 +87,7 @@ Reemplaza Código.gs por la versión actual y ejecuta instalarRadar para que el 
 
 **Ver archivos y último resultado** muestra el último OK/error. En Apps Script revisa **Ejecuciones** y **Activadores**. Un archivo sin acceso, una pestaña ausente, una fecha inválida o un total escrito inválido detienen la carga completa; no se guarda solo una parte de los archivos.
 
-Se solicita una ejecución cada hora; Google decide el instante y puede retrasarla. La carga tiene un límite de **50.000 filas físicas y 8 MB**. Si se excede, habrá que dividir el procesamiento conservando el histórico. Las cuotas dependen de la cuenta y pueden cambiar. Referencias: [disparadores horarios](https://developers.google.com/apps-script/reference/script/clock-trigger-builder), [cuotas de Apps Script](https://developers.google.com/apps-script/guides/services/quotas).
+Se solicita una ejecución cada 4 horas; Google decide el instante y puede retrasarla. La carga tiene un límite de **50.000 filas físicas y 8 MB**. Si se excede, habrá que dividir el procesamiento conservando el histórico. Las cuotas dependen de la cuenta y pueden cambiar. Referencias: [disparadores horarios](https://developers.google.com/apps-script/reference/script/clock-trigger-builder), [cuotas de Apps Script](https://developers.google.com/apps-script/guides/services/quotas).
 
 ## Mantenimiento del receptor
 

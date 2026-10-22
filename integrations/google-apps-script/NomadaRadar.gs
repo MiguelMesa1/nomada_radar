@@ -12,7 +12,7 @@ function onOpen(){
   .addItem('Sincronizar ahora','sincronizarRadar')
   .addItem('Agregar archivo de otro año','agregarArchivoRadar')
   .addItem('Ver archivos y último resultado','estadoRadar')
-  .addItem('Instalar actualización cada hora','instalarRadar').addToUi();
+  .addItem('Instalar actualización cada 4 horas','instalarRadar').addToUi();
 }
 function archivosRadar_(){
  if(!RADAR_ARCHIVO_INICIAL||!/^https:\/\//.test(RADAR_ENDPOINT)||!Array.isArray(RADAR_ARCHIVOS_ANUALES))throw new Error('Configura RADAR_ENDPOINT, RADAR_ARCHIVO_INICIAL y RADAR_ARCHIVOS_ANUALES en las propiedades del script.');
@@ -33,9 +33,11 @@ function instalarRadar(){
  // Verify access, data and endpoint BEFORE installing a recurring trigger.
  sincronizarRadar();
  var triggers=ScriptApp.getProjectTriggers().filter(function(t){return t.getHandlerFunction()==='sincronizarRadar';});
- if(!triggers.length)ScriptApp.newTrigger('sincronizarRadar').timeBased().everyHours(1).create();
- triggers.slice(1).forEach(function(t){ScriptApp.deleteTrigger(t);});
- SpreadsheetApp.getUi().alert('Primera carga completada. Actualización programada cada hora.');
+ // Trigger metadata does not expose its interval. Replace old hourly triggers,
+ // creating the new schedule first so a Google quota failure keeps the old one.
+ ScriptApp.newTrigger('sincronizarRadar').timeBased().everyHours(4).create();
+ triggers.forEach(function(t){ScriptApp.deleteTrigger(t);});
+ SpreadsheetApp.getUi().alert('Carga completada. Actualización automática cada 4 horas. Puedes usar Actualizar cuando lo necesites.');
 }
 function esVentasRadar_(name){return normalizarRadar_(name)==='ventas';}
 function normalizarRadar_(value){return String(value==null?'':value).normalize('NFD').replace(/[\u0300-\u036f]/g,'').trim().toLowerCase();}

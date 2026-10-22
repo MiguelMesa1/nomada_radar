@@ -98,7 +98,7 @@ Cada archivo anual tiene una sola pestaña **Ventas**. Los meses se calculan por
 - **Conteo POST ID** contiene bloques de interacciones mensuales.
 - **Todos los ID** registra las interacciones. Su columna `Fecha`, en formato `YYYY-MM-DD` o ISO con zona horaria, permite consultar días.
 
-La integración principal usa Apps Script, sin cuenta de servicio. Lee solo las columnas necesarias y no importa nombres, teléfonos ni direcciones de clientes. Un disparador de Google puede ejecutarla cada hora con el computador apagado. **Actualizar** solicita una carga inmediata y vuelve a consultar el informe.
+La integración principal usa Apps Script, sin cuenta de servicio. Lee solo las columnas necesarias y no importa nombres, teléfonos ni direcciones de clientes. Un disparador de Google puede ejecutarla cada 4 horas con el computador apagado. **Actualizar** solicita una carga inmediata y vuelve a consultar el informe.
 
 Las pantallas consultan PostgreSQL por el periodo seleccionado; no leen Google Sheets al navegar. La sincronización sí verifica todos los archivos anuales registrados para detectar correcciones históricas y filas omitidas. En PostgreSQL, ventas e interacciones sin cambios no se reescriben. Las incidencias de calidad conservan una sola instantánea vigente, que solo se sustituye cuando cambian los pendientes; los resúmenes de sincronización y la auditoría se conservan.
 
@@ -159,7 +159,7 @@ npm run start
 
 Configura las variables privadas en el alojamiento, usa HTTPS y conserva el origen correcto. La app incluye roles, límites de solicitudes, comprobación de origen, cookies HttpOnly, CSP y validación. La protección volumétrica de red depende también del proveedor de alojamiento.
 
-Consulta [la publicación en Vercel](DEPLOYMENT.md) para configurar un proyecto separado, las variables y las comprobaciones previas. No se necesita un cron de Vercel: el disparador horario permanece en Google Apps Script.
+Consulta [la publicación en Vercel](DEPLOYMENT.md) para configurar un proyecto separado, las variables y las comprobaciones previas. No se necesita un cron de Vercel: el disparador cada 4 horas permanece en Google Apps Script.
 
 ## Archivos excluidos de Git
 
