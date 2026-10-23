@@ -9,10 +9,14 @@ import {interactionRanking} from '@/lib/interaction-ranking';
 import {filterInteractions,interactionsCSV} from '@/lib/interactions-report';
 import {conversionForPost} from '@/lib/conversion';
 import { loadSnapshot } from '@/lib/data';
+import {cachedMetaAds} from '@/lib/meta-ads-cache';
+import {attachMetaAds,metaCostColumns,metaCostValues} from '@/lib/meta-ad-data';
+export const maxDuration=60;
 import { failure,parseRange,requireProfile } from '@/lib/server';
 export async function GET(r:Request){try{
  await protectRequest(r,'export');const auth=await requireProfile(['principal','analista']);await protectUser(auth.profile.user_id,'export');
  const u=new URL(r.url),{from,to}=parseRange(u),data=await loadSnapshot(from,to,auth);
+ if(u.searchParams.get('view')==='post-id'&&process.env.META_ACCESS_TOKEN)data.catalog=attachMetaAds(data.catalog,await cachedMetaAds(process.env.META_AD_ACCOUNT_ID??'225078280870839',from,to));
  const sales=data.sales.map(s=>({...s,linea:saleLine(s,data.catalog)}));
  const catalog=data.catalog,m=metrics(sales,catalog,from,to);let csv:string;
  if(u.searchParams.get('view')==='interacciones')csv=interactionsCSV(filterInteractions(interactionRanking(data,{from,to}),sales,u.searchParams.get('q')??'',u.searchParams.get('line')??'',u.searchParams.get('sort')??'interactions'),sales);
@@ -24,7 +28,7 @@ export async function GET(r:Request){try{
  }else{
   const q=normalize(u.searchParams.get('q')),f=u.searchParams.get('filter')??'Todos',line=u.searchParams.get('line')??'';
   const posts=sortPostMetrics(m.posts.filter(p=>(!q||normalize(p.post_id+' '+p.nombre_creativo+' '+postLine(p,sales)).includes(q))&&(!line||postLine(p,sales)===line)&&(f==='Todos'||f==='Con ventas'&&p.orders>0||f==='Sin ventas'&&!p.orders||f==='Inactivos'&&!p.activo||f==='Activos'&&p.activo)),{sales,interactions:data.interactions,dailyInteractions:data.dailyInteractions,range:{from,to}},u.searchParams.get('sort')??'orders',u.searchParams.get('dir')==='asc'?'asc':'desc');
-  csv=toCSV(['Post ID','Creativo','Línea','Pedidos','Interacciones del periodo','Conversión ventas/interacciones %','Valor conocido COP','Ticket COP (solo totales conocidos)','Participación %','Ventas con total','Totales pendientes'],posts.map(p=>{const conversion=conversionForPost(p.post_id,p.orders,data.interactions??[],{from,to},data.dailyInteractions??[]);return[p.post_id,p.nombre_creativo,postLine(p,sales),p.orders,conversion.interactions,conversion.rate,p.pricedOrders||!p.orders?p.value:null,p.ticket,p.share,p.pricedOrders,p.pendingTotals];}));
+  csv=toCSV(['Post ID','Creativo','Línea','Pedidos','Interacciones del periodo','Conversión ventas/interacciones %','Valor conocido COP','Ticket COP (solo totales conocidos)','Participación %','Ventas con total','Totales pendientes',...(u.searchParams.get('view')==='post-id'?metaCostColumns:[])],posts.map(p=>{const conversion=conversionForPost(p.post_id,p.orders,data.interactions??[],{from,to},data.dailyInteractions??[]);return[p.post_id,p.nombre_creativo,postLine(p,sales),p.orders,conversion.interactions,conversion.rate,p.pricedOrders||!p.orders?p.value:null,p.ticket,p.share,p.pricedOrders,p.pendingTotals,...(u.searchParams.get('view')==='post-id'?metaCostValues(p):[])];}));
  }
  return new Response(csv,{headers:{'Content-Type':'text/csv; charset=utf-8','Cache-Control':'no-store','Content-Disposition':`attachment; filename="nomada-${from}-${to}.csv"`}});
 }catch(e){return failure(e)}}

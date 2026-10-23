@@ -1,5 +1,12 @@
 'use client';
 import {publicationLink} from '@/lib/publication-link';
+import type {CatalogPost} from '@/lib/types';
+
+export function PublicationLinks({post}:{post?:CatalogPost|null}){
+ const networks=new Set<string>();
+ const urls=[post?.publicacion_url,post?.meta?.facebookUrl,post?.meta?.instagramUrl].filter(url=>{const link=publicationLink(url);if(!link||networks.has(link.network))return false;networks.add(link.network);return true});
+ return <>{urls.map(url=><PublicationLink key={url} url={url}/>)}</>;
+}
 
 export function PublicationLink({url}:{url?:string|null}){
  const publication=publicationLink(url);

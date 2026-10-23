@@ -1,7 +1,7 @@
 import { createAdminClient } from '@insforge/sdk';
 process.loadEnvFile('.env.local');
 const email=process.env.RADAR_ADMIN_EMAIL,name=process.env.RADAR_ADMIN_NAME,password=process.env.RADAR_ADMIN_PASSWORD;
-if(!email||!name||!password||password.length<10)throw Error('Configura RADAR_ADMIN_EMAIL, RADAR_ADMIN_NAME y RADAR_ADMIN_PASSWORD (mínimo 10 caracteres) en .env.local. Nunca compartas ese archivo.');
+if(!email||!name||!password||password.length<7)throw Error('Configura RADAR_ADMIN_EMAIL, RADAR_ADMIN_NAME y RADAR_ADMIN_PASSWORD (mínimo 7 caracteres) en .env.local. Nunca compartas ese archivo.');
 const client=createAdminClient({baseUrl:process.env.NEXT_PUBLIC_INSFORGE_URL,apiKey:process.env.INSFORGE_API_KEY});
 const existing=await client.database.from('user_profiles').select('user_id').limit(1);
 if(existing.error)throw Error('No se pudo verificar el estado de inicialización.');

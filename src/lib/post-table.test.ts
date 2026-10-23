@@ -19,4 +19,11 @@ describe('Sortable Post ID columns',()=>{
   expect(sorted('value','asc')).toEqual(['D','A','B','C']);
   expect(posts.map(post=>post.post_id)).toEqual(['A','B','C','D']);
  });
+ it('sorts numeric Meta costs and keeps missing amounts last in both directions',()=>{
+  const rows=posts.map((p,index)=>({...p,meta:{id:p.post_id,name:p.post_id,facebookUrl:null,instagramUrl:null,frequency:null,impressions:null,reach:null,spend:[100,0,null,50][index],cpc:[2,0,null,1][index],cpm:[300,0,null,100][index],currency:'COP'}}));
+  for(const column of ['spend','cpc','cpm']){
+   expect(sortPostMetrics(rows,context,column,'asc').map(p=>p.post_id)).toEqual(['B','D','A','C']);
+   expect(sortPostMetrics(rows,context,column,'desc').map(p=>p.post_id)).toEqual(['A','D','B','C']);
+  }
+ });
 });

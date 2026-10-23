@@ -161,6 +161,14 @@ Configura las variables privadas en el alojamiento, usa HTTPS y conserva el orig
 
 Consulta [la publicación en Vercel](DEPLOYMENT.md) para configurar un proyecto separado, las variables y las comprobaciones previas. No se necesita un cron de Vercel: el disparador cada 4 horas permanece en Google Apps Script.
 
+## Datos de anuncios de Meta
+
+Configura `META_ACCESS_TOKEN` como secreto del servidor y `META_AD_ACCOUNT_ID` con la cuenta publicitaria autorizada. El token necesita `ads_read` y acceso a la cuenta. El ID del catálogo se relaciona exactamente con el ID de anuncio de Meta; no se relaciona por nombre. Al consultar Radar, los IDs nuevos reciben automáticamente el nombre, los enlaces disponibles y las métricas de Meta. No se crean ni modifican campañas en Meta.
+
+Post ID y su detalle muestran gasto total, CPC (todos los clics) y CPM directamente de Meta, en la moneda de la cuenta y para el periodo seleccionado. El CSV incluye la moneda y los valores originales; los costos ausentes quedan vacíos.
+
+La frecuencia corresponde al anuncio y al periodo seleccionado, sin sumar frecuencias de anuncios ni de días. Los valores ausentes aparecen como “Sin dato”. La consulta se carga aparte de las ventas y usa caché de 15 minutos; la siguiente consulta después del vencimiento renueva los datos. La carga de Sheets conserva su programación independiente.
+
 ## Archivos excluidos de Git
 
 [.gitignore](.gitignore) excluye los archivos `.env` salvo la plantilla, claves privadas, credenciales de servicios, configuración local, carpetas privadas de herramientas, datos de ventas, exportaciones, documentos fuente, copias, capturas y artefactos de pruebas o compilación.
