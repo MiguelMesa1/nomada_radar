@@ -1,5 +1,5 @@
 'use client';
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { lineId, lineMetrics } from '@/lib/lines';
 import { aggregate, coveredMoney, metrics, money, number, percent,normalize } from '@/lib/analytics';
 import {canonicalLine,isMissingLine,postLine,preparedLines} from '@/lib/classification';
@@ -8,13 +8,16 @@ import type { Sale,CatalogPost,PostMetric } from '@/lib/types';
 import { SalesChart } from './charts';
 import {Plus} from 'lucide-react';
 import {lineOptions as allLineOptions} from '@/lib/line-options';
+import type {LinePostActivity} from '@/lib/line-post-activity';
 
-export function Lines({current, previous,catalog, from, to, selected, onSelect,onPostSelect,lines=[],onAdd}: {
+export function Lines({current, previous,catalog, from, to, selected, onSelect,onPostSelect,lines=[],onAdd,activity=[],onAssignSale}: {
   current: Sale[]; previous: Sale[]; catalog:CatalogPost[]; from: string; to: string;
-  selected: string; onSelect: (id: string) => void;onPostSelect:(post:PostMetric)=>void;lines?:string[];onAdd?:()=>void;
+  selected: string; onSelect: (id: string) => void;onPostSelect:(post:PostMetric)=>void;lines?:string[];onAdd?:()=>void;activity?:LinePostActivity[];onAssignSale?:(sale:Sale,line:string)=>Promise<void>;
 }) {
   const [sort, setSort] = useState('orders');
   const [chartValue, setChartValue] = useState(false);
+  const [activityLimit,setActivityLimit]=useState(10);
+  useEffect(()=>setActivityLimit(10),[selected,from,to]);
   const lineGroups = useMemo(() => lineMetrics(current, previous), [current, previous]);
   const rows = useMemo(() => current.filter(s => !selected || lineId(s) === selected), [current, selected]);
   const prior = useMemo(() => previous.filter(s => !selected || lineId(s) === selected), [previous, selected]);
@@ -24,6 +27,9 @@ export function Lines({current, previous,catalog, from, to, selected, onSelect,o
   const ordered = [...lineGroups].sort((a, b) => sort === 'value' ? b.value - a.value : b.orders - a.orders);
   const active = lineGroups.find(b => b.id === selected)??lineOptions.find(b=>b.id===selected);
   const change = prior.length ? (rows.length - prior.length) / prior.length * 100 : null;
+  const activityRows=useMemo(()=>activity.filter(row=>!selected||row.lineId===selected),[activity,selected]);
+  const countedPosts=activityRows.filter(row=>row.interactions!==null);
+  const interactionTotal=countedPosts.reduce((sum,row)=>sum+row.interactions!,0);
   const stats = [
     ['Cantidad de ventas', number(rows.length), change === null ? 'Sin ventas en el periodo anterior' : `${change >= 0 ? '+' : ''}${percent(change)} vs. periodo anterior`],
     ['Valor vendido', coveredMoney(summary.value, summary.pricedOrders, summary.total), `${number(summary.pricedOrders)} de ${number(rows.length)} ventas con total`],
@@ -44,7 +50,14 @@ export function Lines({current, previous,catalog, from, to, selected, onSelect,o
       <p className="muted small">Una venta por fila de la hoja · destinos reportados en el pedido.</p>
     </div>
     <div className="kpis">{stats.map(([label, value, note]) => <div className="card kpi" key={label}><div className="kpi-label">{label}</div><div className="kpi-value">{value}</div><div className="kpi-note">{note}</div></div>)}</div>
-    {selected&&<div className="card panel line-sales-detail"><SalesDetail key={selected} sales={rows} line={active?.name??'Línea seleccionada'}/></div>}<section className="table-wrap line-comparison">
+    <section className="card panel line-interactions" aria-label="Interacciones por línea">
+      <div className="line-interactions-heading"><div><h2>Interacciones · {active?.name??'Todas las líneas'}</h2><p className="muted small">Mismo conteo y periodo que en Post ID. Incluye publicaciones que todavía no tienen ventas.</p></div><div className="line-interactions-total"><strong>{countedPosts.length?number(interactionTotal):'Sin dato'}</strong><span>interacciones del periodo</span></div></div>
+      <p className="muted small">{number(activityRows.length)} Post ID · {number(countedPosts.length)} con conteo disponible{countedPosts.length<activityRows.length?' · Total parcial: hay IDs sin conteo para este periodo.':''}</p>
+      <div className="table-wrap"><table aria-label="Actividad de Post ID por línea"><thead><tr>{['Post ID','Línea','Interacciones','Ventas','Conversión'].map(label=><th key={label}>{label}</th>)}</tr></thead><tbody>{activityRows.slice(0,activityLimit).map(row=><tr key={row.post.post_id}><td><button type="button" className="text-link" onClick={()=>onPostSelect(row.post)}>{row.post.post_id}</button>{row.post.nombre_creativo!==row.post.post_id&&<small>{row.post.nombre_creativo}</small>}</td><td>{row.line}</td><td><b>{row.interactions===null?'Sin dato':number(row.interactions)}</b></td><td>{number(row.post.orders)}</td><td>{row.rate===null?'—':percent(row.rate)}</td></tr>)}</tbody></table></div>
+      {activityRows.length>activityLimit&&<button type="button" className="button small line-interactions-more" onClick={()=>setActivityLimit(value=>value+10)}>Ver más Post ID ({number(activityRows.length-activityLimit)} restantes)</button>}
+      {!activityRows.length&&<p className="muted small">No hay Post ID asignados a esta línea. Puedes asignarles la línea desde el catálogo.</p>}
+    </section>
+    {selected&&<div className="card panel line-sales-detail"><SalesDetail key={selected} sales={rows} line={active?.name??'Línea seleccionada'} lines={lines} onAssignSale={onAssignSale}/></div>}<section className="table-wrap line-comparison">
       <div className="panel-heading panel"><h2>Comparativo de líneas</h2><select aria-label="Ordenar líneas" value={sort} onChange={e => setSort(e.target.value)}><option value="orders">Más ventas</option><option value="value">Mayor valor conocido</option></select></div>
       <table><thead><tr>{['Línea', 'Ventas', 'Participación', 'Valor conocido', 'Ticket promedio', 'Vs. periodo anterior', 'Ciudades', 'Ciudad líder'].map(h => <th key={h}>{h}</th>)}</tr></thead>
         <tbody>{ordered.map(b => <tr key={b.id} className={selected === b.id ? 'line-selected' : ''}>

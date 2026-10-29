@@ -11,7 +11,7 @@ export async function loadSnapshot(from:string,to:string,auth?:Awaited<ReturnTyp
  if((interactions.data?.length??0)>10000)throw new AppError('El periodo supera 10.000 registros de interacciones. Reduce el rango.',422);
  async function loadSales():Promise<Sale[]>{
  const sales:Sale[]=[];for(let page=0;page<100;page++){
-  const {data,error}=await client.database.from('sales_orders').select('pedido_id,fecha_venta,post_id,ciudad_original,ciudad_normalizada,departamento,importe_cop,estado,linea').gte('fecha_venta',since+'T00:00:00-05:00').lte('fecha_venta',to+'T23:59:59.999-05:00').in('estado',(process.env.VALID_SALE_STATES??'confirmado,pagado,entregado').split(',').map(s=>s.trim())).order('pedido_id').range(page*1000,page*1000+999);
+  const {data,error}=await client.database.from('sales_orders').select('pedido_id,fecha_venta,post_id,ciudad_original,ciudad_normalizada,departamento,importe_cop,estado,linea,resumen_pedido').gte('fecha_venta',since+'T00:00:00-05:00').lte('fecha_venta',to+'T23:59:59.999-05:00').in('estado',(process.env.VALID_SALE_STATES??'confirmado,pagado,entregado').split(',').map(s=>s.trim())).order('pedido_id').range(page*1000,page*1000+999);
   if(error)throw new AppError('No pudimos leer las ventas. Intenta de nuevo.',503);sales.push(...(data as Sale[]??[]));if((data?.length??0)<1000)break;if(page===99)throw new AppError('Este periodo supera 100.000 pedidos. Reduce el rango para consultar cifras completas.',422);
  }
  return sales;

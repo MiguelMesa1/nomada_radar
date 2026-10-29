@@ -1,12 +1,13 @@
 import assert from 'node:assert/strict';
 import {chromium} from 'playwright';
-const base=process.env.RADAR_QA_URL??'http://127.0.0.1:3134';
+const base=process.env.RADAR_QA_URL??'http://127.0.0.1:3000';
 const day=new Intl.DateTimeFormat('en-CA',{timeZone:'America/Bogota'}).format(new Date());
 const post=(post_id,publicacion_url)=>({post_id,publicacion_url,nombre_creativo:'Video '+post_id,producto:'NS 200',campana:'',plataforma:'Otra',activo:true,fecha_inicio:day});
 const snapshot={mode:'live',profile:{user_id:'qa',nombre:'QA',email:'',role:'analista',activo:true},catalog:[post('FB','https://www.facebook.com/share/p/abc/'),post('IG','https://www.instagram.com/reel/abc/'),post('EMPTY',null)],sales:[],runs:[],interactions:[]};
 const browser=await chromium.launch({headless:true});
 const page=await browser.newPage({viewport:{width:1440,height:1000}});page.setDefaultTimeout(20000);
 const errors=[],writes=[];page.on('pageerror',error=>errors.push(error.message));
+await page.route('**/api/meta?**',route=>route.fulfill({json:{configured:true,ads:[{id:'EMPTY',name:'Anuncio dinámico',facebookUrl:null,instagramUrl:'https://www.instagram.com/p/dynamic/',frequency:null,impressions:null,reach:null}]}}));
 await page.route('**/api/snapshot?**',route=>route.fulfill({json:snapshot}));
 await page.route('**/api/catalog',route=>{const data=route.request().postDataJSON();writes.push(data);const index=snapshot.catalog.findIndex(post=>post.post_id===data.post_id);if(index<0)snapshot.catalog.push(data);else snapshot.catalog[index]={...snapshot.catalog[index],...data};return route.fulfill({json:{ok:true}})});
 const link=(network,scope=page)=>scope.getByRole('link',{name:`Ver publicación en ${network} (abre en otra pestaña)`,exact:true});
@@ -16,19 +17,18 @@ const save=async dialog=>{await dialog.getByRole('button',{name:'Guardar Post ID
 try{
  await page.goto(base+'/catalogo',{waitUntil:'networkidle'});
  await link('Facebook',row('FB')).waitFor();await link('Instagram',row('IG')).waitFor();
- assert.equal(await row('EMPTY').getByRole('link').count(),0);
+ await link('Instagram',row('EMPTY')).waitFor();assert.equal(await link('Instagram',row('EMPTY')).getAttribute('href'),'https://www.instagram.com/p/dynamic/');
  assert.equal(await link('Facebook').getAttribute('target'),'_blank');
  assert.match(await link('Facebook').getAttribute('rel'),/noopener/);
  await page.screenshot({path:'.next/publication-links-catalog.png',fullPage:true});
  const color=await link('Facebook').evaluate(node=>({background:getComputedStyle(node).backgroundColor,theme:getComputedStyle(document.documentElement).getPropertyValue('--yellow')}));
  assert.ok(color.theme.trim());assert.notEqual(color.background,'rgba(0, 0, 0, 0)');
- let dialog=await edit('EMPTY');await dialog.getByLabel('Enlace de la publicación (opcional)',{exact:true}).fill('https://instagram.com.evil.test/p/1');
- await dialog.getByRole('button',{name:'Guardar Post ID',exact:true}).click();await dialog.getByRole('alert').waitFor();assert.equal(writes.length,0);
- await dialog.getByLabel('Enlace de la publicación (opcional)',{exact:true}).fill('https://www.instagram.com/p/new/');await save(dialog);
- await link('Instagram',row('EMPTY')).waitFor();
- await row('EMPTY').getByRole('switch').click();await page.getByRole('switch',{name:'Activar EMPTY'}).filter({hasText:'Inactivo'}).waitFor();assert.equal(writes.at(-1).publicacion_url,'https://www.instagram.com/p/new/');
- dialog=await edit('FB');assert.equal(await dialog.getByLabel('Enlace de la publicación (opcional)',{exact:true}).inputValue(),'https://www.facebook.com/share/p/abc/');
- await dialog.getByLabel('Enlace de la publicación (opcional)',{exact:true}).fill('');await save(dialog);await link('Facebook').waitFor({state:'hidden'});assert.equal(writes.at(-1).publicacion_url,null);
+ await page.getByRole('button',{name:'Agregar Post ID',exact:true}).click();
+ let dialog=page.getByRole('dialog');assert.equal(await dialog.locator('input[name="publicacion_url"]').count(),0,'No manual URL field when adding');await dialog.getByRole('button',{name:'Cerrar',exact:true}).click();
+ dialog=await edit('EMPTY');assert.equal(await dialog.locator('input[name="publicacion_url"]').count(),0,'No manual URL field when editing');await dialog.getByLabel('Línea',{exact:true}).fill('XTZ 125');await save(dialog);
+ assert.equal(writes.at(-1).publicacion_url,null);await link('Instagram',row('EMPTY')).waitFor();assert.equal(await link('Instagram',row('EMPTY')).getAttribute('href'),'https://www.instagram.com/p/dynamic/');
+ await row('EMPTY').getByRole('switch').click();await page.getByRole('switch',{name:'Activar EMPTY'}).filter({hasText:'Inactivo'}).waitFor();await link('Instagram',row('EMPTY')).waitFor();
+ dialog=await edit('FB');await save(dialog);assert.equal(writes.at(-1).publicacion_url,'https://www.facebook.com/share/p/abc/','Editing a line preserves existing data');
  await page.reload({waitUntil:'networkidle'});await link('Instagram',row('EMPTY')).waitFor();
  await page.goto(base+'/post-id',{waitUntil:'networkidle'});
  await page.context().route('https://www.instagram.com/**',route=>route.fulfill({body:'Publication destination'}));
@@ -38,5 +38,5 @@ try{
  await page.setViewportSize({width:390,height:844});await page.getByRole('button',{name:'Ver detalle de IG',exact:true}).click();await link('Instagram',page.getByRole('dialog')).waitFor();await page.screenshot({path:'.next/publication-links-mobile.png',fullPage:true});
  await page.getByRole('dialog').getByRole('button',{name:'Cerrar',exact:true}).click();assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));
  snapshot.profile.role='visualizador';await page.goto(base+'/catalogo',{waitUntil:'networkidle'});await link('Instagram',row('IG')).waitFor();assert.ok(await page.getByRole('button',{name:'IG',exact:true}).isDisabled());
- assert.deepEqual(errors,[]);console.log('Publication links passed: network icons, optional edit/clear, persistence, validation, toggling, detail drawer, mobile and read-only access.');
+ assert.deepEqual(errors,[]);console.log('Publication links passed: no manual URL input on add/edit, dynamic Meta links after saving/reload, existing-data preservation, toggling, detail drawer, mobile and read-only access.');
 }finally{await browser.close()}

@@ -1,0 +1,42 @@
+import assert from 'node:assert/strict';
+import {mkdirSync} from 'node:fs';
+import {chromium} from 'playwright';
+const base=process.env.RADAR_QA_URL??'http://127.0.0.1:3000';
+const day=new Intl.DateTimeFormat('en-CA',{timeZone:'America/Bogota'}).format(new Date());
+const post=(id,producto='',url=null)=>({post_id:id,producto,publicacion_url:url,nombre_creativo:'Video '+id,campana:'',plataforma:'Facebook',activo:true,fecha_inicio:day});
+const ad=(id)=>({id,name:'Anuncio '+id,facebookUrl:'https://www.facebook.com/100/posts/200',instagramUrl:null,frequency:null,impressions:null,reach:null});
+const snapshot={mode:'live',profile:{user_id:'qa',nombre:'QA',email:'',role:'analista',activo:true},catalog:[post('MANUAL','','https://instagram.com/p/manual/'),post('ASSIGNED','NS 200'),post('NO-LINK')],sales:[{pedido_id:'1',post_id:'SALE',fecha_venta:day+'T12:00:00-05:00',linea:'XTZ 125',importe_cop:100000,estado:'confirmado',ciudad_original:'',ciudad_normalizada:'',departamento:''}],interactions:['INTERACTION','META','MANUAL','NO-LINK','ASSIGNED'].map(post_id=>({post_id,mes:day.slice(0,7),interacciones:5})).concat([{post_id:'ZERO',mes:day.slice(0,7),interacciones:0}]),dailyInteractions:[{mes:day.slice(0,7),sin_fecha:0,rows:[{post_id:'DAY',fecha:day,interacciones:1}]}],runs:[]};
+const browser=await chromium.launch({headless:true}),page=await browser.newPage({viewport:{width:1440,height:1000}});page.setDefaultTimeout(20000);
+const errors=[],writes=[];let reject=true;
+page.on('pageerror',error=>errors.push(error.message));
+await page.route('**/api/snapshot?**',route=>route.fulfill({json:snapshot}));
+await page.route('**/api/meta?**',route=>route.fulfill({json:{configured:true,ads:[ad('META'),ad('ASSIGNED'),ad('ZERO'),...Array.from({length:1321},(_,i)=>ad('OLD-'+i))]}}));
+await page.route('**/api/catalog',route=>{
+ const body=route.request().postDataJSON();writes.push({method:route.request().method(),body});
+ if(reject)return route.fulfill({status:503,json:{error:'No pudimos guardar la línea.'}});
+ if(route.request().method()==='POST')snapshot.catalog.push(body);else snapshot.catalog=snapshot.catalog.map(post=>post.post_id===body.post_id?body:post);
+ return route.fulfill({json:{ok:true}});
+});
+const queue=page.getByRole('region',{name:'Post IDs sin línea',exact:true});
+const assign=id=>queue.getByRole('button',{name:'Asignar línea pendiente al Post ID '+id,exact:true});
+const save=async line=>{await page.getByRole('dialog').getByLabel('Línea del Post ID').fill(line);await page.getByRole('dialog').getByRole('button',{name:'Guardar línea',exact:true}).click()};
+mkdirSync('tmp/qa',{recursive:true});
+try{
+ await page.goto(base+'/inicio',{waitUntil:'domcontentloaded',timeout:120000});
+ await page.getByRole('link',{name:'Revisar Post IDs sin línea',exact:true}).click();await queue.waitFor();
+ await assign('META').waitFor();assert.equal(await queue.locator('li').count(),5);assert.equal(await assign('ASSIGNED').count(),0);for(const id of ['SALE','ZERO','OLD-0','OLD-1320'])assert.equal(await assign(id).count(),0,'Uncounted or zero-count IDs must not enter the queue');
+ assert.equal(await queue.getByRole('link',{name:'Ver anuncio de MANUAL en Instagram',exact:true}).getAttribute('href'),'https://instagram.com/p/manual/');
+ assert.equal(await queue.getByRole('link',{name:'Ver anuncio de META en Facebook',exact:true}).getAttribute('target'),'_blank');
+ await queue.locator('li').filter({has:page.getByText('NO-LINK',{exact:true})}).getByText('Enlace del anuncio no disponible',{exact:true}).waitFor();
+ await assign('META').click();await save('Boxer');await page.getByRole('dialog').getByRole('alert').waitFor();
+ reject=false;await save('Boxer');await page.getByRole('dialog').waitFor({state:'hidden'});await assign('META').waitFor({state:'hidden'});
+ assert.equal(writes.at(-1).method,'POST');assert.equal(writes.at(-1).body.publicacion_url,'https://www.facebook.com/100/posts/200');assert.equal(writes.at(-1).body.producto,'Boxer CT 100');
+ await page.setViewportSize({width:390,height:844});await assign('MANUAL').click();await save('Pulsar');await page.getByRole('dialog').waitFor({state:'hidden'});await assign('MANUAL').waitFor({state:'hidden'});
+ assert.equal(writes.at(-1).method,'PATCH');assert.equal(writes.at(-1).body.publicacion_url,'https://instagram.com/p/manual/');
+ assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));await queue.screenshot({path:'tmp/qa/unassigned-posts-mobile.png'});
+ await page.reload({waitUntil:'domcontentloaded',timeout:120000});await queue.waitFor();assert.equal(await assign('META').count(),0);assert.equal(await assign('MANUAL').count(),0);
+ await page.getByLabel('Buscar Post IDs sin línea',{exact:true}).fill('interaction');assert.equal(await queue.locator('li').count(),1);
+ snapshot.interactions.push({post_id:'OLD-0',mes:day.slice(0,7),interacciones:1});await page.reload({waitUntil:'domcontentloaded',timeout:120000});await queue.waitFor();await assign('OLD-0').waitFor();
+ snapshot.profile.role='visualizador';await page.reload({waitUntil:'domcontentloaded',timeout:120000});await queue.waitFor();assert.equal(await queue.getByRole('button',{name:/Asignar línea pendiente/}).count(),0);
+ assert.deepEqual(errors,[]);console.log('Unassigned posts passed: positive Excel counts only, exclusion of 1321 historical Meta ads, automatic inclusion on first count, verified ad links, save retry, POST/PATCH persistence, mobile, search and read-only permissions.');
+}finally{await browser.close()}

@@ -1,12 +1,25 @@
 import {afterEach,beforeEach,describe,expect,it,vi} from 'vitest';
 vi.mock('server-only',()=>({}));
-import {loadMetaAds} from './meta-ads';
-import {attachMetaAds,metaNumber,formatMetaCost,metaCostValues} from './meta-ad-data';
+import {loadMetaAds,loadMetaInsights} from './meta-ads';
+import {attachMetaAds,metaNumber,metaPreviewURL,formatMetaCost,metaCostValues} from './meta-ad-data';
 const fetcher=vi.fn();
 beforeEach(()=>{vi.stubGlobal('fetch',fetcher);vi.stubEnv('META_ACCESS_TOKEN','private-test-token');fetcher.mockReset()});
 afterEach(()=>{vi.unstubAllGlobals();vi.unstubAllEnvs()});
 const ok=(data:unknown,paging?:unknown)=>Response.json({data,paging});
 describe('Meta ad reporting',()=>{
+ it('reports ad account rate limits as 429 instead of retryable server errors',async()=>{
+  fetcher.mockImplementation(()=>Promise.resolve(Response.json({error:{code:80004,message:'private-test-token'}},{status:400})));
+  await expect(loadMetaAds('123','2026-10-29','2026-10-29')).rejects.toMatchObject({status:429,retryAfter:300});
+ });
+ it('requests only the selected day when the 29th is selected',async()=>{
+  vi.useFakeTimers();vi.setSystemTime(new Date('2026-10-29T17:00:00Z'));
+  fetcher.mockResolvedValue(ok([]));
+  try{await loadMetaInsights('123','2026-10-29','2026-10-29');expect(JSON.parse(fetcher.mock.calls[0][0].searchParams.get('time_range'))).toEqual({since:'2026-10-29',until:'2026-10-29'})}finally{vi.useRealTimers()}
+ });
+ it('allows safe Meta thumbnails without leaking credentials or loading arbitrary image hosts',()=>{
+  expect(metaPreviewURL('https://scontent.xx.fbcdn.net/ad.jpg?oh=signature')).toBe('https://scontent.xx.fbcdn.net/ad.jpg?oh=signature');
+  for(const url of ['http://scontent.xx.fbcdn.net/ad.jpg','https://fbcdn.net.evil.test/ad.jpg','https://user:pass@scontent.xx.fbcdn.net/ad.jpg','https://scontent.xx.fbcdn.net/ad.jpg?access_token=secret','data:image/svg+xml,test'])expect(metaPreviewURL(url)).toBeNull();
+ });
  it('paginates safely, joins exact ad IDs and preserves absent metrics as missing',async()=>{
   fetcher.mockImplementation((url:URL,options:RequestInit)=>{
    expect(options.headers).toEqual({Authorization:'Bearer private-test-token'});expect(url.href).not.toContain('private-test-token');

@@ -1,9 +1,16 @@
 import { describe,it,expect } from 'vitest';
-import { parsePush,pushHeaders } from './sheets-push';
+import { parsePush,pushHeaders,pushSummaryHeaders } from './sheets-push';
 const file='fixture_workbook_2026_abcdefghijkl';
 const row=['15/10/2026','POST01','Bogota','Cundinamarca',null,'Nomada',null];
 const sheet=(spreadsheetId=file,sheetId=0,name='Octubre',rows:unknown[][]=[pushHeaders,row])=>({spreadsheetId,sheetId,name,rows});
 describe('Apps Script full snapshot',()=>{
+ it('accepts optional product summaries only for unattributed sales and preserves legacy pushes',()=>{
+  const rows=[pushSummaryHeaders,['15/10/2026','','Bogota','Cundinamarca',5000,'Otra marca',null,'Cúpula negra para Pulsar'],['15/10/2026','','Bogota','Cundinamarca',5000,'Sin línea',null,'Direccionales'],[...row,'Product for a known post']];
+  const batch=parsePush({version:1,sheets:[sheet(file,0,'Ventas',rows)]});
+  expect(batch.sales.map(s=>s.resumen_pedido)).toEqual(['Cúpula negra para Pulsar','Direccionales','']);
+  expect(parsePush({version:1,sheets:[sheet()]}).sales[0]).not.toHaveProperty('resumen_pedido');
+  expect(()=>parsePush({version:1,sheets:[sheet(file,0,'Ventas',[pushSummaryHeaders,[...row,'x'.repeat(1501)]])]})).toThrow();
+ });
  it('imports IDs without sales, deduplicates the same model and rejects conflicting models',()=>{
   const item={post_id:'new01',producto:'XTZ 125'};
   const result=parsePush({version:1,sheets:[sheet()],catalog:[item,item]});

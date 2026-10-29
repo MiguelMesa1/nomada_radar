@@ -1,0 +1,2 @@
+.login{display:flex;flex-wrap:wrap;gap:3px 8px;margin-top:8px;color:var(--muted);font-size:11px;line-height:1.5}
+.login time{color:var(--text);font-variant-numeric:tabular-nums}

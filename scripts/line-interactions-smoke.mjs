@@ -1,0 +1,30 @@
+import assert from 'node:assert/strict';
+import {chromium} from 'playwright';
+const base=process.env.RADAR_QA_URL??'http://127.0.0.1:3003';
+const today=new Intl.DateTimeFormat('en-CA',{timeZone:'America/Bogota'}).format(new Date()),month=today.slice(0,7);
+const ids=['A','B','C','D','E'];
+const catalog=ids.map(post_id=>({post_id,nombre_creativo:post_id,producto:'Cúpula',campana:'',plataforma:'Otra',activo:true,fecha_inicio:month+'-01'}));
+const snapshot={mode:'live',profile:{user_id:'qa',nombre:'QA',email:'',role:'analista',activo:true},catalog,sales:[],runs:[],interactions:ids.map((post_id,index)=>({post_id,mes:month,interacciones:[5,4,3,3,2][index]})),dailyInteractions:[{mes:month,sin_fecha:0,rows:ids.map((post_id,index)=>({post_id,fecha:today,interacciones:[5,4,3,3,2][index]}))}]};
+const browser=await chromium.launch({headless:true}),page=await browser.newPage({viewport:{width:1440,height:1000}});page.setDefaultTimeout(25000);
+const errors=[];page.on('pageerror',error=>errors.push(error.message));
+await page.route('**/api/snapshot?**',route=>route.fulfill({json:snapshot}));
+await page.route('**/api/meta?**',route=>route.fulfill({json:{configured:false,ads:[]}}));
+try{
+ await page.goto(base+'/lineas',{waitUntil:'domcontentloaded'});
+ await page.getByLabel('Filtrar por línea',{exact:true}).selectOption('line:cupula');
+ const panel=page.getByRole('region',{name:'Interacciones por línea',exact:true});
+ await panel.locator('.line-interactions-total strong').getByText('17',{exact:true}).waitFor();
+ assert.equal(await panel.locator('tbody tr').count(),5,'All five IDs must remain visible without sales');
+ assert.equal(await panel.locator('tbody tr td:nth-child(4)').allTextContents().then(values=>values.join(',')),'0,0,0,0,0');
+ await panel.getByRole('button',{name:'A',exact:true}).click();await page.getByRole('dialog').waitFor();
+ await page.getByRole('dialog').getByRole('button',{name:'Cerrar',exact:true}).click();
+ await page.getByRole('link',{name:'Post ID',exact:true}).first().click();
+ await page.locator('.posts-table tbody tr').last().waitFor();
+ const postTotal=(await page.locator('.posts-table tbody td:nth-child(4)').allTextContents()).reduce((sum,value)=>sum+Number(value),0);assert.equal(postTotal,17,'Post ID and Lines must use the same interaction total');
+ await page.getByRole('link',{name:'Líneas',exact:true}).first().click();await page.getByLabel('Filtrar por línea',{exact:true}).selectOption('line:cupula');
+ await page.getByRole('group',{name:'Ver informe por',exact:true}).getByRole('button',{name:'Día',exact:true}).click();
+ await panel.locator('.line-interactions-total strong').getByText('17',{exact:true}).waitFor();
+ await page.setViewportSize({width:390,height:844});assert(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));
+ assert.deepEqual(errors,[]);
+ console.log('Line interactions passed: five Cupula IDs, 17 interactions, zero sales, detail drawer, Post ID parity, daily selection and mobile fit.');
+}finally{await browser.close()}

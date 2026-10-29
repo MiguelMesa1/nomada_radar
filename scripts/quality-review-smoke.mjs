@@ -1,0 +1,33 @@
+import assert from 'node:assert/strict';
+import {chromium} from 'playwright';
+const base=process.env.RADAR_QA_URL??'http://127.0.0.1:3003';
+const day=new Intl.DateTimeFormat('en-CA',{timeZone:'America/Bogota'}).format(new Date());
+const sale=(id,post_id,linea,resumen_pedido=null)=>({pedido_id:id,post_id,linea,resumen_pedido,fecha_venta:day+'T12:00:00-05:00',importe_cop:null,estado:'confirmado',ciudad_original:'',ciudad_normalizada:'',departamento:''});
+const snapshot={mode:'live',profile:{user_id:'qa',nombre:'QA',email:'',role:'analista',activo:true},catalog:[],sales:[sale('1','UNKNOWN-A','Otra marca'),sale('2','UNKNOWN-A','Otra marca'),sale('3','UNKNOWN-B','NS 200'),sale('organic','','Otra marca','Pedido orgánico privado'),sale('missing','','','Cúpula alta negra')],interactions:[],runs:[]};
+const browser=await chromium.launch({headless:true}),page=await browser.newPage({viewport:{width:1440,height:1000}});
+page.setDefaultTimeout(20000);let reject=true,snapshotReads=0;const writes=[],errors=[];
+page.on('pageerror',e=>errors.push(e.message));
+await page.route('**/api/snapshot?**',r=>{snapshotReads++;return r.fulfill({json:snapshot})});
+await page.route('**/api/meta?**',r=>r.fulfill({json:{configured:true,ads:[{id:'UNKNOWN-A',name:'Cúpula en carretera',facebookUrl:'https://www.facebook.com/100/posts/UNKNOWN-A',instagramUrl:null,frequency:null,impressions:null,reach:null}]}}));
+await page.route('**/api/catalog',r=>{const body=r.request().postDataJSON();writes.push(body);if(reject)return r.fulfill({status:503,json:{error:'No pudimos guardar.'}});snapshot.catalog.push(body);return r.fulfill({json:{ok:true}})});
+try{
+ await page.goto(base+'/calidad',{waitUntil:'domcontentloaded',timeout:120000});
+ const card=title=>page.locator('.quality-card').filter({has:page.getByRole('heading',{name:title,exact:true})});
+ assert.equal(await card('Post ID sin catálogo').locator('.count').innerText(),'2');
+ assert.equal(await card('Ventas sin línea').locator('.count').innerText(),'1');
+ assert.equal(await card('Totales pendientes').locator('.count').innerText(),'4');
+ await page.getByRole('button',{name:'Revisar anuncios',exact:true}).click();const modal=page.getByRole('dialog');
+ await modal.getByText('UNKNOWN-A',{exact:true}).first().waitFor();
+ await modal.getByLabel('Línea del anuncio').fill('Cúpula');await modal.getByRole('button',{name:'Guardar y siguiente',exact:true}).click();await modal.getByRole('alert').waitFor();
+ assert.equal(await modal.getByLabel('Línea del anuncio').inputValue(),'Cúpula');reject=false;const reads=snapshotReads;
+ await modal.getByRole('button',{name:'Guardar y siguiente',exact:true}).click();await modal.getByText('UNKNOWN-B',{exact:true}).first().waitFor();
+ assert.equal(writes.at(-1).producto,'Cúpula');assert.equal(snapshotReads,reads);
+ await modal.getByLabel('Línea del anuncio').fill('NS 200');await modal.getByRole('button',{name:'Guardar línea',exact:true}).click();await modal.getByRole('heading',{name:'Todo al día'}).waitFor();
+ await page.keyboard.press('Escape');await card('Ventas sin línea').getByRole('button',{name:'Asignar línea',exact:true}).click();
+ await page.getByRole('dialog').getByText('Cúpula alta negra',{exact:true}).waitFor();assert.equal(await page.getByText('Pedido orgánico privado',{exact:true}).count(),0);
+ await page.keyboard.press('Escape');await page.reload({waitUntil:'domcontentloaded',timeout:120000});assert.equal(await card('Post ID sin catálogo').locator('.count').innerText(),'0');
+ snapshot.catalog=[];await page.setViewportSize({width:390,height:844});await page.reload({waitUntil:'domcontentloaded',timeout:120000});await page.getByRole('button',{name:'Revisar anuncios',exact:true}).click();await modal.getByLabel('Línea del anuncio').waitFor();
+ assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));
+ await page.keyboard.press('Escape');snapshot.profile.role='visualizador';await page.reload({waitUntil:'domcontentloaded',timeout:120000});await page.getByRole('button',{name:'Revisar anuncios',exact:true}).waitFor();assert.equal(await page.getByRole('button',{name:'Revisar anuncios',exact:true}).isDisabled(),true);
+ assert.deepEqual(errors,[]);console.log('Quality review passed: organic exclusion, summaries, save failure/retry, next ID, local refresh, persistence, mobile and viewer permissions.');
+}finally{await browser.close()}

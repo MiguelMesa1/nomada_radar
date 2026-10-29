@@ -4,7 +4,7 @@ import {chromium} from 'playwright';
 const base=process.env.RADAR_QA_URL??'http://127.0.0.1:3003';
 const date='2026-10-14T17:00:00Z',file='abcdefghijklmnopqrstuv';
 const sale=row=>({pedido_id:`__fila__:${file}:0:${row}`,post_id:'',fecha_venta:date,linea:'Sin línea',importe_cop:null,ciudad_original:'',ciudad_normalizada:'',departamento:'',estado:'confirmado'});
-const snapshot={catalog:[],sales:[sale(1046),sale(1047)],interactions:[],runs:[],profile:{user_id:'qa',nombre:'QA',email:'',role:'principal',activo:true},mode:'live'};
+const snapshot={catalog:[],lines:['Pulsar 135'],sales:[sale(1046),sale(1047)],interactions:[],runs:[],profile:{user_id:'qa',nombre:'QA',email:'',role:'principal',activo:true},mode:'live'};
 const browser=await chromium.launch({headless:true}),page=await browser.newPage({viewport:{width:1440,height:1000}});
 const errors=[],writes=[];let reject=true;
 page.on('pageerror',error=>errors.push(error.message));
@@ -16,8 +16,8 @@ await page.route('**/api/sales/line',route=>{
  return route.fulfill({json:{ok:true,...body}});
 });
 const assign=()=>page.getByRole('button',{name:'Asignar línea a venta '+sale(1046).pedido_id,exact:true});
-const save=async value=>{await page.getByRole('dialog').getByLabel('Línea de la venta').fill(value);await page.getByRole('dialog').getByRole('button',{name:'Guardar línea',exact:true}).click()};
-async function open(){await page.goto(base+'/conversion?from=2026-10-01&to=2026-10-31',{waitUntil:'networkidle'});await page.getByRole('heading',{name:'Conversión',exact:true}).waitFor()}
+const save=async value=>{await page.getByRole('dialog').getByLabel('Línea de la venta').selectOption(value);await page.getByRole('dialog').getByRole('button',{name:'Guardar línea',exact:true}).click()};
+async function open(){await page.goto(base+'/conversion?from=2026-10-01&to=2026-10-31',{waitUntil:'domcontentloaded',timeout:120000});await page.getByRole('heading',{name:'Conversión',exact:true}).waitFor()}
 mkdirSync('tmp/qa',{recursive:true});
 try{
  await open();await page.getByRole('button',{name:'Sin línea',exact:true}).click();
@@ -29,13 +29,27 @@ try{
  await page.locator('.sales-detail').getByText('Importada: Sin línea',{exact:true}).waitFor();
  assert.equal(snapshot.sales[1].linea,'Sin línea');assert.equal(snapshot.sales[0].post_id,'');
  assert.equal(writes.at(-1).pedido_id,sale(1046).pedido_id);
- await page.reload({waitUntil:'networkidle'});await page.getByRole('button',{name:'Otra marca',exact:true}).click();
+ await page.reload({waitUntil:'domcontentloaded',timeout:120000});await page.getByRole('button',{name:'Otra marca',exact:true}).click();
  await assign().waitFor();assert.equal(await page.locator('.sales-detail tbody tr').count(),1);
  assert.equal(await page.locator('.sales-detail').getByRole('link').count(),0);await page.getByText('Hoja 0 · fila 1046',{exact:true}).waitFor();
- await page.setViewportSize({width:390,height:844});await assign().click();await save('XTZ125');await page.getByRole('dialog').waitFor({state:'hidden'});
+ await page.setViewportSize({width:390,height:844});await assign().click();
+ const selector=page.getByRole('dialog').getByLabel('Línea de la venta');
+ assert.equal(await selector.inputValue(),'Otra marca');
+ const options=await selector.locator('option').allTextContents();
+ for(const line of ['Otra marca','XTZ 125','XTZ 150','Pulsar 135'])assert.ok(options.includes(line),`Missing line option: ${line}`);
+ await selector.selectOption('Pulsar 135');assert.equal(await selector.inputValue(),'Pulsar 135');
+ await save('XTZ 125');await page.getByRole('dialog').waitFor({state:'hidden'});
  await page.getByRole('button',{name:'XTZ 125',exact:true}).click();await page.locator('.sales-detail').getByText('Importada: Sin línea',{exact:true}).waitFor();
  assert.equal(snapshot.sales[0].linea,'XTZ 125');assert.equal(snapshot.sales[0].linea_importada,'Sin línea');
  assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));await page.screenshot({path:'tmp/qa/sale-line-mobile.png',fullPage:true});
+ snapshot.catalog=[{post_id:'LEADER',nombre_creativo:'Anuncio líder',producto:'XTZ 150',marca:'Yamaha',campana:'',plataforma:'Facebook',activo:true}];
+ snapshot.sales.push({...sale(1048),post_id:'LEADER',linea:'XTZ 125'});
+ await page.goto(base+'/inicio?from=2026-10-01&to=2026-10-31',{waitUntil:'domcontentloaded',timeout:120000});
+ const leader=page.locator('.kpis .kpi').filter({has:page.getByText('Post ID líder',{exact:true})});
+ await leader.getByText('Anuncio líder',{exact:true}).waitFor();
+ assert.match(await leader.locator('.kpi-note').innerText(),/LEADER · Línea: XTZ 150 · 1 pedidos/);
+ assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));
+ snapshot.sales=snapshot.sales.filter(row=>row.post_id!=='LEADER');
  snapshot.profile.role='visualizador';await open();await page.getByRole('button',{name:'XTZ 125',exact:true}).click();assert.equal(await assign().count(),0);
  assert.deepEqual(errors,[]);console.log('Sale line assignment passed: per-row save, retry, Otra marca, reload persistence, original line, source reference without a file link, mobile and viewer permissions.');
 }finally{await browser.close()}

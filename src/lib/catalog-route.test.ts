@@ -1,8 +1,9 @@
 import {beforeEach,describe,expect,it,vi} from 'vitest';
-const mock=vi.hoisted(()=>({auth:vi.fn(),write:vi.fn(),single:vi.fn()}));
+const mock=vi.hoisted(()=>({auth:vi.fn(),write:vi.fn(),single:vi.fn(),lookup:vi.fn()}));
 vi.mock('@/lib/security',()=>({protectRequest:vi.fn(),protectUser:vi.fn()}));
 vi.mock('@/lib/http-security',()=>({readJSON:(request:Request)=>request.json()}));
 vi.mock('@/lib/publication-link',async()=>await import('./publication-link'));
+vi.mock('@/lib/catalog-duplicate',async()=>await import('./catalog-duplicate'));
 vi.mock('@/lib/server',async()=>{
  const {AppError}=await import('./errors');
  return {AppError,requireProfile:mock.auth,failure:(error:InstanceType<typeof AppError>)=>Response.json({error:error.message},{status:error.status})};
@@ -14,10 +15,29 @@ const request=(fields:object)=>new Request('https://radar.test/api/catalog',{met
 beforeEach(()=>{
  vi.clearAllMocks();
  const query={eq:()=>query,select:()=>query,single:mock.single};
+ const read={eq:()=>read,maybeSingle:mock.lookup};
  mock.write.mockReturnValue(query);mock.single.mockResolvedValue({error:null});
- mock.auth.mockResolvedValue({profile:{user_id:'actor'},client:{database:{from:()=>({insert:mock.write,update:mock.write})}}});
+ mock.lookup.mockResolvedValue({data:null});
+ mock.auth.mockResolvedValue({profile:{user_id:'actor'},client:{database:{from:()=>({insert:mock.write,update:mock.write,select:()=>read})}}});
 });
 describe('optional publication URL persistence',()=>{
+ it('rejects duplicate IDs with their saved line, including a concurrent insertion and differently cased input',async()=>{
+  mock.single.mockResolvedValueOnce({error:{code:'23505'}});
+  mock.lookup.mockResolvedValueOnce({data:{post_id:'A',producto:'Pulsar'}});
+  const response=await POST(request({post_id:' a ',producto:'XTZ 125'}));
+  expect(response.status).toBe(409);
+  expect(await response.json()).toEqual({error:'El Post ID A ya se encuentra en el catálogo y está asignado a la línea Pulsar 180.'});
+  expect(mock.write).toHaveBeenCalledTimes(1);
+  expect(mock.write).toHaveBeenCalledWith([expect.objectContaining({post_id:'A'})]);
+ });
+ it('also rejects a duplicate that has no assigned line, and never guesses the line when lookup fails',async()=>{
+  mock.single.mockResolvedValue({error:{code:'23505'}});
+  mock.lookup.mockResolvedValueOnce({data:{post_id:'A',producto:''}});
+  expect(await (await POST(request({}))).json()).toEqual({error:'El Post ID A ya se encuentra en el catálogo y todavía no tiene una línea asignada.'});
+  mock.lookup.mockResolvedValueOnce({data:null,error:{}});
+  const response=await POST(request({producto:'NS 200'}));
+  expect(response.status).toBe(409);expect((await response.json()).error).not.toContain('NS 200');
+ });
  it('creates with a trimmed link and explicitly clears one on edit',async()=>{
   expect((await POST(request({publicacion_url:' https://www.instagram.com/p/abc/ '}))).status).toBe(200);
   expect(mock.write).toHaveBeenLastCalledWith([expect.objectContaining({publicacion_url:'https://www.instagram.com/p/abc/'})]);

@@ -1,5 +1,5 @@
 import {normalize} from './analytics';
-import {canonicalLine,isMissingLine} from './classification';
+import {canonicalLine,isMissingLine,saleLine} from './classification';
 import type {CatalogPost,Sale} from './types';
 
 export function isOtherCatalogLine(value:unknown){return ['otra marca','otra linea','otra','otros','otras'].includes(normalize(value));}
@@ -11,7 +11,7 @@ export function catalogLineOptions(catalog:CatalogPost[]){
 export function filterCatalog<T extends CatalogPost>(catalog:T[],query='',status='Todos',line='',sales:Sale[]=[]){
  const q=normalize(query);
  const salesLines=new Map<string,Set<string>>();
- for(const sale of sales)if(sale.post_id){const lines=salesLines.get(sale.post_id)??new Set<string>();lines.add(normalize(canonicalLine(sale.linea)));salesLines.set(sale.post_id,lines);}
+ for(const sale of sales)if(sale.post_id){const lines=salesLines.get(sale.post_id)??new Set<string>();lines.add(normalize(saleLine(sale,catalog)));salesLines.set(sale.post_id,lines);}
  const requested=line==='other'?'otra marca':line.startsWith('line:')?line.slice(5):'';
  return catalog.filter(post=>{
   const assigned=canonicalLine(post.producto);

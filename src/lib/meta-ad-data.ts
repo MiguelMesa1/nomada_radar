@@ -1,5 +1,15 @@
 import type {CatalogPost} from './types';
-export type MetaAd={id:string;name:string;facebookUrl:string|null;instagramUrl:string|null;frequency:number|null;impressions:number|null;reach:number|null;spend?:number|null;cpc?:number|null;cpm?:number|null;currency?:string|null};
+export type MetaAd={id:string;name:string;facebookUrl:string|null;instagramUrl:string|null;thumbnailUrl?:string|null;frequency:number|null;impressions:number|null;reach:number|null;spend?:number|null;cpc?:number|null;cpm?:number|null;currency?:string|null};
+export function metaCatalogOnly(ads:MetaAd[]):MetaAd[]{return ads.map(ad=>({...ad,frequency:null,impressions:null,reach:null,spend:null,cpc:null,cpm:null,currency:null}));}
+export function mergeMetaAds(catalog:MetaAd[],insights:MetaAd[]):MetaAd[]{
+ const rows=new Map(metaCatalogOnly(catalog).map(ad=>[ad.id,ad]));
+ for(const insight of insights){const ad=rows.get(insight.id);rows.set(insight.id,{...ad,...insight,name:ad?.name||insight.name,facebookUrl:ad?.facebookUrl??insight.facebookUrl,instagramUrl:ad?.instagramUrl??insight.instagramUrl,thumbnailUrl:ad?.thumbnailUrl??insight.thumbnailUrl})}
+ return [...rows.values()];
+}
+export function metaPreviewURL(value:unknown){
+ if(typeof value!=='string'||value.length>4096)return null;
+ try{const url=new URL(value);if(url.protocol!=='https:'||url.username||url.password||url.port||!['fbcdn.net','cdninstagram.com'].some(host=>url.hostname===host||url.hostname.endsWith('.'+host))||[...url.searchParams.keys()].some(key=>['access_token','appsecret_proof'].includes(key.toLowerCase())))return null;return url.href;}catch{return null;}
+}
 const costFormatters=new Map<string,Intl.NumberFormat>();
 export function formatMetaCost(amount:number|null|undefined,currency:string|null|undefined){
  if(amount===undefined||amount===null||!Number.isFinite(amount)||!currency||!/^[A-Z]{3}$/.test(currency))return 'Sin dato';

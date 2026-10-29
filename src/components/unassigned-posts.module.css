@@ -1,0 +1,15 @@
+.panel{margin-bottom:24px;scroll-margin-top:85px;min-width:0}
+.heading{display:flex;align-items:flex-start;justify-content:space-between;gap:16px;margin-bottom:16px}
+.heading p{margin-top:7px;line-height:1.6}
+.heading>svg{flex-shrink:0;color:var(--muted)}
+.search{margin-bottom:14px;max-width:520px}
+.list{list-style:none;margin:0;padding:0}
+.row{display:grid;grid-template-columns:minmax(120px,1fr) minmax(180px,1fr) auto;gap:16px;align-items:center;border-top:1px solid var(--border);padding:15px 0}
+.identity{min-width:0;overflow-wrap:anywhere}
+.identity strong{display:block;font-size:12px}
+.identity span,.identity small{display:block;font-size:11px;color:var(--muted);margin-top:5px}
+.links{display:flex;flex-wrap:wrap;gap:10px;min-width:0}
+.links a{display:inline-flex;align-items:center;gap:5px;font-size:11px;overflow-wrap:anywhere}
+.pagination{display:flex;align-items:center;justify-content:flex-end;flex-wrap:wrap;gap:10px;margin-top:16px;font-size:11px;color:var(--muted)}
+.pagination>span{margin-right:auto}
+@media(max-width:760px){.row{grid-template-columns:minmax(0,1fr);gap:12px}.row>button{justify-self:start}.links{gap:12px}.pagination>span{flex-basis:100%}}

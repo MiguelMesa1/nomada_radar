@@ -9,6 +9,10 @@ export function canonicalLine(value:unknown){
 }
 export function saleLine(sale:Sale,catalog:CatalogPost[]=[]){
  const line=canonicalLine(sale.linea),post=catalog.find(p=>p.post_id===sale.post_id);
+ if(post&&line==='Otra marca'){
+  const assigned=canonicalLine(post.producto);
+  if(!isMissingLine(assigned)&&assigned!=='Otra marca')return assigned;
+ }
  // Ventas!B716 explicitly names XTZ 125 (verified 2026-10-16). Guard
  // identity, date and missing Post ID so this is not a global XTZ alias.
  if(lineKey(line)==='xtz'){

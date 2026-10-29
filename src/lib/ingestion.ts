@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { normalize, parseCOP } from './analytics';
 import type { Sale } from './types';
+import {canonicalLine,isMissingLine} from './classification';
 export type CityAlias = { alias:string; ciudad_canonica:string; departamento:string };
 export type ImportIssue = { row:number; sheet:string; type:string; message:string; pedido_id?:string };
 const required = { pedido_id:['pedido_id','id pedido','id del pedido','id venta'],fecha:['fecha','fecha_venta','fecha venta'], total:['total del pedido','valor_total','total pedido','valor total'],post:['post id','post_id'],city:['ciudad'],department:['departamento'] };
@@ -24,7 +25,7 @@ export function parseSheet(sheet:string,rows:unknown[][],aliases:CityAlias[]=[],
  const missing=Object.entries(c).filter(([k,v])=>v<0&&k!=='pedido_id'&&k!=='total').map(([k])=>k);
  if(missing.length)throw Error(`Faltan columnas en ${sheet}: ${missing.join(', ')}. La carga anterior se conserva.`);
  const coordinateMode=c.pedido_id<0;
- const stateCol=idx(['estado','estado del pedido']),lineCol=idx(['linea','marca']),sales:Sale[]=[],issues:ImportIssue[]=[];let read=0;
+ const stateCol=idx(['estado','estado del pedido']),lineCol=idx(['linea','marca']),summaryCol=idx(['resumen del pedido','resumen_pedido','producto','productos','detalle del pedido']),sales:Sale[]=[],issues:ImportIssue[]=[];let read=0;
  for(let i=1;i<rows.length;i++){
   const row=rows[i];if(!row.some(v=>String(v??'').trim()))continue;read++;
   const id=coordinateMode?`__fila__:${sheet}:${i+1}`:String(row[c.pedido_id]??'').trim(),date=parseSaleDate(row[c.fecha]),rawAmount=row[c.total],pendingAmount=rawAmount==null||String(rawAmount).trim()==='',amount=pendingAmount?null:parseCOP(rawAmount);
@@ -37,7 +38,9 @@ export function parseSheet(sheet:string,rows:unknown[][],aliases:CityAlias[]=[],
   const post_id=String(row[c.post]??'').trim().toUpperCase();
   if(!canonical)issues.push({sheet,row:i+1,type:'city',message:'Ciudad pendiente de normalizar',pedido_id:id});
   if(pendingAmount)issues.push({sheet,row:i+1,type:'missing_total',message:'Total del pedido pendiente; la venta sí cuenta',pedido_id:id});
-  sales.push({pedido_id:id,fecha_venta:date,post_id,ciudad_original:original,ciudad_normalizada:canonical,departamento:dept,importe_cop:amount,estado:state,linea:lineCol<0?'':String(row[lineCol]??'').trim()});
+  const importedLine=lineCol<0?'':String(row[lineCol]??'').trim(),needsSummary=!post_id&&(isMissingLine(importedLine)||canonicalLine(importedLine)==='Otra marca');
+  const summary=summaryCol>=0?{resumen_pedido:needsSummary?String(row[summaryCol]??'').trim().slice(0,1500):''}:{};
+  sales.push({...summary,pedido_id:id,fecha_venta:date,post_id,ciudad_original:original,ciudad_normalizada:canonical,departamento:dept,importe_cop:amount,estado:state,linea:importedLine});
  }
  if(!read||!sales.length)throw Error(`No hay filas válidas en ${sheet}. Se conserva la carga anterior.`);
  if(coordinateMode&&issues.some(i=>i.type==='invalid'))throw Error(`Hay filas con fecha, estado o importe escrito inválido en ${sheet}. Los totales vacíos sí se admiten. Se conserva la carga anterior.`);

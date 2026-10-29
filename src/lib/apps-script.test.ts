@@ -51,8 +51,8 @@ describe('Google Apps Script adapter',()=>{
   const {context,sheet,requested}=setup();
   const result=context.prepararPestanaRadar_({getId:()=> 'source-id'},sheet);
   expect(requested).toEqual([2,4,5,6,7,8]);
-  expect(result.rows[1]).toEqual(['2026-10-15','ABC','Bogota','Cundinamarca','','Nomada',null]);
-  expect(result.rows[2]).toEqual(['','','','','','',null]);
+  expect(result.rows[1]).toEqual(['2026-10-15','ABC','Bogota','Cundinamarca','','Nomada',null,'']);
+  expect(result.rows[2]).toEqual(['','','','','','',null,'']);
   expect(JSON.stringify(result)).not.toMatch(/Cliente privado|555|privado/);
  });
  it('rejects empty Ventas or missing headers and ignores unrelated tabs',()=>{
@@ -60,6 +60,15 @@ describe('Google Apps Script adapter',()=>{
   expect(context.prepararPestanaRadar_({}, {...sheet,getName:()=> 'Enero'})).toBe(null);
   expect(()=>context.prepararPestanaRadar_({getName:()=> '2027'}, {...sheet,getLastRow:()=>0})).toThrow('necesita encabezados');
   expect(()=>context.prepararPestanaRadar_({getName:()=> '2027'}, {...sheet,getRange:()=>({getDisplayValues:()=>[['Nombre']]})})).toThrow('Faltan encabezados');
+ });
+ it('sends product summaries only for unclassified sales without a Post ID',()=>{
+  const {context}=setup();const requested:number[]=[];
+  const headers=['Fecha','POST ID','Ciudad','Departamento','Total del pedido','Linea','Producto','Nombre','Telefono'];
+  const rows=[['2026-10-28','','Bogotá','Cundinamarca','524.000 pesos','Otra marca','Cúpula alta','Cliente privado','555'],['2026-10-28','ABC','Bogotá','Cundinamarca',145000,'Otra marca','Producto clasificado','Cliente privado','555'],['2026-10-28','','Bogotá','Cundinamarca',335000,'','Accesorio negro','Cliente privado','555']];
+  const sheet={getName:()=> 'Ventas',getLastRow:()=>4,getLastColumn:()=>headers.length,getSheetId:()=>0,getRange:(row:number,col:number)=>{if(row>1)requested.push(col);return {getDisplayValues:()=>[headers],getValues:()=>rows.map(values=>[values[col-1]])}}};
+  const result=context.prepararPestanaRadar_({getId:()=> 'source-id'},sheet);
+  expect(result.rows.map((row:unknown[])=>row[7])).toEqual(['Resumen del pedido','Cúpula alta','','Accesorio negro']);
+  expect(requested).not.toContain(8);expect(requested).not.toContain(9);expect(JSON.stringify(result)).not.toMatch(/Cliente privado|555|Producto clasificado/);
  });
  it('stops without posting a partial snapshot if either annual file lacks Ventas',()=>{
   const {context,props,sheet}=setup();let posted=false;

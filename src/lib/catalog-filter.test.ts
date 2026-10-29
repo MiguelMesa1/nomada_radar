@@ -25,11 +25,12 @@ describe('Catalog filters by assigned line',()=>{
   const sale=(post_id:string,linea:string)=>({post_id,linea} as Sale);
   const sales=[sale('PULSAR','Otra Marca'),sale('SUPER',' otra LÍNEA '),sale('BLANK','OTRA MARCA'),sale('UNRELATED','NS 200')];
   const ids=filterCatalog(posts,'','Todos','other',sales).map(p=>p.post_id);
-  expect(ids).toEqual(['PULSAR','SUPER','BLANK','SAVED']);
+  expect(ids).toEqual(['BLANK','SAVED']);
   const locationIds=new Set([...locationSales(sales,posts,'Otra marca').map(s=>s.post_id),'SAVED']);
   expect(new Set(ids)).toEqual(locationIds);
-  expect(filterCatalog(posts,'','Inactivos','other',sales).map(p=>p.post_id)).toEqual(['SUPER']);
-  expect(filterCatalog(posts,'pulsar','Todos','other',sales).map(p=>p.post_id)).toEqual(['PULSAR']);
+  expect(filterCatalog(posts,'','Inactivos','other',sales)).toEqual([]);
+  expect(filterCatalog(posts,'pulsar','Todos','other',sales)).toEqual([]);
+  expect(filterCatalog(posts,'','Todos','line:pulsar 180',sales).map(p=>p.post_id)).toEqual(['PULSAR']);
   expect(posts[0].producto).toBe('Pulsar 180');
  });
  it('keeps saved missing lines distinct and uses only sales supplied for the selected period',()=>{

@@ -3,27 +3,31 @@ import { parseSheet, consolidate, type CityAlias } from './ingestion';
 import {canonicalLine} from './classification';
 const monthlyInteractionSchema=z.object({mes:z.string().regex(/^\d{4}-(?:0[1-9]|1[0-2])$/),rows:z.array(z.object({post_id:z.string().trim().min(1).max(100).transform(s=>s.toUpperCase()),interacciones:z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER)}).strict()).max(10000)}).strict();
 
-// Only analytics fields are accepted. Client names, phone numbers and products
-// never cross this interface, even when a spreadsheet has additional columns.
+// Only analytics fields are accepted. Client names and phone numbers
+// never cross this interface. Product summaries are optional and restricted to
+// sales without an ID and with an unclassified line.
 export const pushSchema=z.object({
  version:z.literal(1),
  sheets:z.array(z.object({
   spreadsheetId:z.string().regex(/^[\w-]{20,100}$/),
   sheetId:z.number().int().nonnegative(),
   name:z.string().min(1).max(100),
-  rows:z.array(z.array(z.union([z.string().max(500),z.number().finite(),z.null()])).length(7)).min(1).max(50001)
+  rows:z.array(z.union([z.array(z.union([z.string().max(500),z.number().finite(),z.null()])).length(7),z.tuple([z.string().or(z.number()).nullable(),z.string().or(z.number()).nullable(),z.string().or(z.number()).nullable(),z.string().or(z.number()).nullable(),z.string().or(z.number()).nullable(),z.string().or(z.number()).nullable(),z.string().or(z.number()).nullable(),z.string().max(1500).nullable()])])).min(1).max(50001)
  }).strict()).min(1).max(120),
  catalog:z.array(z.object({post_id:z.string().trim().min(1).max(100).transform(s=>s.toUpperCase()),producto:z.string().trim().min(1).max(120)}).strict()).max(10000).optional(),
  interactions:z.union([monthlyInteractionSchema,z.array(monthlyInteractionSchema).min(1).max(120)]).optional(),
  daily_interactions:z.array(z.object({mes:z.string().regex(/^\d{4}-(?:0[1-9]|1[0-2])$/),sin_fecha:z.number().int().nonnegative(),rows:z.array(z.object({post_id:z.string().trim().min(1).max(100).transform(s=>s.toUpperCase()),fecha:z.string().regex(/^\d{4}-\d{2}-\d{2}$/),interacciones:z.number().int().positive().max(Number.MAX_SAFE_INTEGER)}).strict()).max(50000)}).strict()).min(1).max(120).optional()
 }).strict();
 export const pushHeaders=['Fecha','POST ID','Ciudad','Departamento','Total del pedido','Linea','Estado'];
+export const pushSummaryHeaders=[...pushHeaders,'Resumen del pedido'];
 export function parsePush(input:unknown,aliases:CityAlias[]=[]){
  const payload=pushSchema.parse(input),seen=new Set<string>();let count=0;
  const batches=payload.sheets.map(s=>{
   const identity=`${s.spreadsheetId}:${s.sheetId}`;
   if(seen.has(identity))throw Error('Pestaña repetida en la carga.');seen.add(identity);
-  if(JSON.stringify(s.rows[0])!==JSON.stringify(pushHeaders))throw Error('Encabezados de integración inválidos.');
+  const headers=JSON.stringify(s.rows[0]);
+  if(headers!==JSON.stringify(pushHeaders)&&headers!==JSON.stringify(pushSummaryHeaders))throw Error('Encabezados de integración inválidos.');
+  if(s.rows.some(row=>row.length!==s.rows[0].length||row.slice(0,7).some(value=>typeof value==='string'&&value.length>500)))throw Error('Columnas de integración inválidas.');
   count+=s.rows.length-1;if(count>50000)throw Error('La carga supera 50.000 filas; requiere dividir el histórico.');
   // Keep the original row offsets, including blank rows. Tab renames do not
   // change identity; separate yearly files cannot collide.

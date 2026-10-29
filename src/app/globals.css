@@ -1,5 +1,8 @@
 @import "tailwindcss" source("../");
 @theme { --color-line: #F0E300; }
+:root{color-scheme:light}
+:root[data-theme=dark]{color-scheme:dark}
+select option,select optgroup{background-color:var(--surface);color:var(--text)}
 @font-face{font-family:Inter;src:url('/fonts/inter.ttf') format('truetype');font-weight:100 900;font-display:swap}
 @font-face{font-family:RadarHeading;src:url('/fonts/heading.ttf') format('truetype');font-weight:900;font-style:italic;font-display:swap}
 @font-face{font-family:RadarDisplay;src:local('Arial Black');font-weight:900;font-display:swap}

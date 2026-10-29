@@ -103,15 +103,18 @@ function prepararPestanaRadar_(book,sheet){
  if(!esVentasRadar_(sheet.getName()))return null;
  if(sheet.getLastRow()===0)throw new Error('La pestaña Ventas de '+book.getName()+' necesita encabezados en la fila 1.');
  var width=sheet.getLastColumn(),headers=sheet.getRange(1,1,1,width).getDisplayValues()[0].map(normalizarRadar_);
- var aliases=[['fecha','fecha_venta','fecha venta'],['post id','post_id'],['ciudad'],['departamento'],['total del pedido','total pedido','valor_total','valor total'],['linea','marca'],['estado','estado del pedido']];
+ var aliases=[['fecha','fecha_venta','fecha venta'],['post id','post_id'],['ciudad'],['departamento'],['total del pedido','total pedido','valor_total','valor total'],['linea','marca'],['estado','estado del pedido'],['producto','productos','resumen del pedido','detalle del pedido']];
  var indexes=aliases.map(function(names){return headers.findIndex(function(h){return names.indexOf(h)>=0;});});
  if(indexes.slice(0,4).some(function(i){return i<0;}))throw new Error('Faltan encabezados en '+book.getName()+' / '+sheet.getName()+'. Usa la fila 1.');
- var rows=[['Fecha','POST ID','Ciudad','Departamento','Total del pedido','Linea','Estado']],height=sheet.getLastRow()-1;
+ var rows=[['Fecha','POST ID','Ciudad','Departamento','Total del pedido','Linea','Estado','Resumen del pedido']],height=sheet.getLastRow()-1;
  if(height>50000)throw new Error('Demasiadas filas en '+sheet.getName()+'.');
- // Read only allowed columns. Do not read client names, phone numbers, links or products.
+ // Read allowed analytics columns and product descriptions only. Never client names, phones or addresses.
  var columns=indexes.map(function(col){return col<0||!height?null:sheet.getRange(2,col+1,height,1).getValues();});
  for(var r=0;r<height;r++){
   var row=columns.map(function(col){var v=col?col[r][0]:null;return v instanceof Date?Utilities.formatDate(v,'America/Bogota','yyyy-MM-dd'):v;});
+  var line=normalizarRadar_(row[5]).replace(/\s+/g,' ');
+  var needsSummary=!String(row[1]||'').trim()&&['','sin linea','otra marca','otra linea','otra','otros','otras'].indexOf(line)>=0;
+  row[7]=needsSummary?String(row[7]||'').trim().slice(0,1500):'';
   // Preserve offsets. A blank physical row is NOT a sale.
   rows.push(row);
  }
