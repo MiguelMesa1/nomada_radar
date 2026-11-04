@@ -5,7 +5,7 @@ const base=process.env.RADAR_QA_URL??'http://127.0.0.1:3003';
 const day=new Intl.DateTimeFormat('en-CA',{timeZone:'America/Bogota'}).format(new Date()),month=day.slice(0,7);
 const post=(id,producto)=>({post_id:id,nombre_creativo:id,producto,campana:'',plataforma:'Otra',fecha_inicio:'',activo:true});
 const file='abcdefghijklmnopqrstuv',sourceRows={A:8,B:10,C:11,D:20,'':716};
-const sale=(id,linea)=>({pedido_id:`__fila__:${file}:456:${sourceRows[id]}`,post_id:id,linea,fecha_venta:day+'T12:00:00-05:00',ciudad_original:'Bogotá',ciudad_normalizada:'Bogotá',departamento:'Cundinamarca',importe_cop:null,estado:'confirmado'});
+const sale=(id,linea)=>({pedido_id:`__fila__:${file}:456:${sourceRows[id]}`,post_id:id,linea,fecha_venta:day+'T12:00:00-05:00',ciudad_original:'Bogotá',ciudad_normalizada:'Bogotá',departamento:'Cundinamarca',importe_cop:id==='A'?100000:id==='B'?300000:id===''?200000:null,estado:'confirmado'});
 const snapshot={catalog:[post('A','NS'),post('B','NS 200'),post('C','NS'),post('D','XTZ125')],sales:[sale('A','NS'),sale('B','NS'),sale('C','NS'),sale('D','XTZ125'),sale('','NS')],interactions:[{post_id:'A',mes:month,interacciones:10},{post_id:'B',mes:month,interacciones:90},{post_id:'D',mes:month,interacciones:5}],runs:[],profile:{user_id:'qa',nombre:'QA',email:'',role:'principal',activo:true},mode:'live'};
 const browser=await chromium.launch({headless:true});
 const page=await browser.newPage({viewport:{width:1440,height:1000},permissions:['clipboard-read','clipboard-write']});page.setDefaultTimeout(30000);
@@ -18,7 +18,7 @@ try{
  await page.goto(`${base}/conversion?from=${month}-01&to=${day}`,{waitUntil:'networkidle',timeout:120000});
  await page.getByRole('heading',{name:'Conversión',exact:true}).waitFor();
  const row=page.locator('.conversion-report > section table tbody tr').filter({has:page.getByRole('button',{name:'NS 200',exact:true})});
- await row.waitFor();assert.match(await row.innerText(),/2 %/);assert.match(await row.innerText(),/1 ventas sin base de interacciones/);
+ await row.waitFor();await page.getByRole('columnheader',{name:'Ticket promedio',exact:true}).waitFor();assert.match(await row.innerText(),/200[.,]000/);assert.match(await row.innerText(),/3 de 4 ventas con total/);assert.match(await row.innerText(),/2 %/);assert.match(await row.innerText(),/1 ventas sin base de interacciones/);
  assert.equal(await page.locator('.conversion-report .kpi-value').first().innerText(),'2,9 %');
  await row.getByRole('button').click();await page.getByRole('heading',{name:'Validar NS 200'}).waitFor();
  assert.equal(await page.locator('#conversion-detail > .table-wrap tbody tr').count(),3);

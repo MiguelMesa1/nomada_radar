@@ -8,6 +8,16 @@ afterEach(()=>vi.useRealTimers());
 const range={from:'2026-10-01',to:'2026-10-31'};
 const snapshot:Snapshot={catalog:[post('A'),post('B'),post('C'),post('D','XTZ125')],sales:[sale('A'),sale('B'),sale('C'),sale('D','XTZ125'),sale('','NS')],interactions:[{post_id:'A',mes:'2026-10',interacciones:10},{post_id:'B',mes:'2026-10',interacciones:90},{post_id:'D',mes:'2026-10',interacciones:5}],runs:[],profile:{user_id:'qa',nombre:'QA',email:'',role:'principal',activo:true},mode:'live'};
 describe('conversion by line',()=>{
+ it('averages known amounts across posts and Sin ID sales within each line and period',()=>{
+  const sales=[{...sale('A'),importe_cop:100000},{...sale('B'),importe_cop:300000},sale('C'),{...sale(''),pedido_id:'no-id',importe_cop:200000},{...sale('D','XTZ125'),importe_cop:0},{...sale('A'),pedido_id:'previous',fecha_venta:'2026-09-30T12:00:00-05:00',importe_cop:900000}];
+  const rows=lineConversion({...snapshot,sales},range),ns=rows.find(row=>row.name==='NS 200')!;
+  expect(ns).toMatchObject({orders:4,value:600000,pricedOrders:3,ticket:200000});
+  expect(rows.find(row=>row.name==='XTZ 125')).toMatchObject({pricedOrders:1,ticket:0});
+  expect(lineConversion(snapshot,range).find(row=>row.name==='NS 200')).toMatchObject({pricedOrders:0,ticket:null});
+  expect(lineConversionCSV([ns])).toContain('"Ticket promedio COP (solo totales conocidos)";"Ventas con total"');
+  expect(lineConversionCSV([ns])).toContain('"200000";"3"');
+ });
+
  it.each([true,false])('keeps six individual unclassified sales even with one grouped Post ID (Sin ID: %s)',mixed=>{
   const sales=Array.from({length:6},(_,i)=>({...sale(mixed&&i>0?'':'A',''),pedido_id:`source-row-${i+2}`}));
   const rows=lineConversion({...snapshot,catalog:[post('A','')],sales,interactions:[]},range);
